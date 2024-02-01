@@ -1,8 +1,8 @@
-name: ai2es
+name: holodec
 channels:
   - conda-forge
 dependencies:
-  - python=3.8
+  - python
   - numpy
   - scipy
   - matplotlib
@@ -24,6 +24,5 @@ dependencies:
   - numba
   - cython
   - pip:
-    - tensorflow
-    - tensorflow-probability
+    - torch
     - .

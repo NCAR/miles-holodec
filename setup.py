@@ -5,16 +5,16 @@ import os
 # https://packaging.python.org/guides/distributing-packages-using-setuptools/
 project_name = os.getcwd().split("/")[-1]
 version = "0.1.0"
-package_description = "<Provide short description of package>"
-url = "https://github.com/ai2es/" + project_name
+package_description = "Production version of HolodecML"
+url = "https://github.com/NCAR/miles-holodec"
 # Classifiers listed at https://pypi.org/classifiers/
 classifiers = ["Programming Language :: Python :: 3"]
-setup(name="ai2estemplate", # Change
+setup(name="holodec", # Change
       version=version,
       description=package_description,
       url=url,
-      author="AI2ES",
+      author="John Schreck, Matt Hayman",
       license="CC0 1.0",
       classifiers=classifiers,
-      packages=find_packages(include=["src"]))
+      packages=find_packages(include=["holodec"]))
 
