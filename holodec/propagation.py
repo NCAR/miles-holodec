@@ -39,6 +39,7 @@ class WavePropagator(object):
             self.zMin, self.zMax, n_bins+1)*1e6  # histogram bin edges
         self.z_centers = self.z_bins[:-1] + 0.5 * \
             np.diff(self.z_bins)  # histogram bin centers
+        self.dz = np.mean(np.diff(self.z_bins))  # calculate plane increment size
 
         self.tile_size = tile_size  # size of tiled images in pixels
         self.step_size = step_size  # amount that we shift the tile to make a new tile
