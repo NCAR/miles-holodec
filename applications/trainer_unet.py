@@ -30,7 +30,7 @@ from torch.distributed.fsdp.wrap import (
 )
 from torchvision import transforms
 from holodec.unet import SegmentationModel
-from holodec.datasets import LoadHolograms
+from holodec.datasets import LoadHolograms, UpsamplingReader
 from holodec.trainer import Trainer
 from holodec.pbs import launch_script, launch_script_mpi
 from holodec.seed import seed_everything
@@ -178,34 +178,64 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     learning_rate = conf["trainer"]["learning_rate"]
     weight_decay = conf["trainer"]["weight_decay"]
 
-    # datasets 
-    train_dataset = LoadHolograms(
+    train_dataset = UpsamplingReader(
         "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc", 
         shuffle = False, 
         device = device, 
-        n_bins = n_bins,
+        n_bins = n_bins, 
         transform = LoadTransformations(conf["transforms"]["training"]),
         lookahead = lookahead, 
         tile_size = tile_size, 
         step_size = step_size,
         output_lst = [torch.abs, torch.angle],
         deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
-        random_tile=True
+        random_tile=False,
+        sig_z = 3000,
     )
 
-    valid_dataset = LoadHolograms(
+    # datasets 
+    # train_dataset = LoadHolograms(
+    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc", 
+    #     shuffle = False, 
+    #     device = device, 
+    #     n_bins = n_bins,
+    #     transform = LoadTransformations(conf["transforms"]["training"]),
+    #     lookahead = lookahead, 
+    #     tile_size = tile_size, 
+    #     step_size = step_size,
+    #     output_lst = [torch.abs, torch.angle],
+    #     deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
+    #     random_tile=True
+    # )
+
+    # valid_dataset = LoadHolograms(
+    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc", 
+    #     shuffle = False, 
+    #     device = device,
+    #     n_bins = n_bins,
+    #     transform = LoadTransformations(conf["transforms"]["validation"]),
+    #     lookahead = lookahead, 
+    #     tile_size = tile_size, 
+    #     step_size = step_size,
+    #     output_lst = [torch.abs, torch.angle],
+    #     deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
+    #     #random_tile=True
+    #     pad=True
+    # )
+
+    valid_dataset = UpsamplingReader(
         "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc", 
         shuffle = False, 
-        device = device,
-        n_bins = n_bins,
+        device = device, 
+        n_bins = n_bins, 
         transform = LoadTransformations(conf["transforms"]["validation"]),
         lookahead = lookahead, 
         tile_size = tile_size, 
         step_size = step_size,
         output_lst = [torch.abs, torch.angle],
         deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
-        #random_tile=True
-        pad=True
+        random_tile=False,
+        sig_z = 3000,
     )
 
     # setup the distributed sampler
