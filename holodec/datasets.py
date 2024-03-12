@@ -436,7 +436,8 @@ class UpsamplingReader(Dataset):
             idx = random.choice(range(self.__len__()))
 
         h_idx, x_part, y_part, z_part, d_part = self.part_lst[idx]
-        z_idx = np.argmin(np.abs(self.propagator.z_centers-(z_part+np.random.randn()*self.sig_z)))
+        z_idx = np.argmin(np.abs(self.propagator.z_centers[self.z_bck_idx:-self.z_fwd_idx]-(z_part+np.random.randn()*self.sig_z)))
+        z_idx += self.z_bck_idx
         print(z_idx)
         
         # h_idx, z_idx = self.indices[idx]
