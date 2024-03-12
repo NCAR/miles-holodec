@@ -38,6 +38,8 @@ from holodec.losses import load_loss
 from holodec.transforms import LoadTransformations
 from holodec.scheduler import load_scheduler
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 warnings.filterwarnings("ignore")
 
