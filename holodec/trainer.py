@@ -387,7 +387,7 @@ class Trainer:
             ###
             ###
             results_dict["epoch"].append(epoch)
-            for name in ["loss", "acc", "mae"]:
+            for name in ["loss", "mae"]:
                 results_dict[f"train_{name}"].append(np.mean(train_results[f"train_{name}"]))
                 results_dict[f"valid_{name}"].append(np.mean(valid_results[f"valid_{name}"]))
             results_dict["lr"].append(optimizer.param_groups[0]["lr"])
@@ -397,7 +397,7 @@ class Trainer:
             # update the learning rate if epoch-by-epoch updates
 
             if conf['trainer']['use_scheduler'] and conf['trainer']['scheduler']['scheduler_type'] == "plateau":
-                scheduler.step(results_dict["valid_acc"][-1])
+                scheduler.step(results_dict["valid_mae"][-1])
 
 #             # Save the best model so far
 #             if not trial:
