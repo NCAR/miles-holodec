@@ -47,7 +47,7 @@ class SegmentationModel(torch.nn.Module):
 
         super(SegmentationModel, self).__init__()
 
-        in_channels = int(2 * conf["data"]["lookahead"])
+        in_channels = int(2 * conf["training_data"]["lookahead"])
 
         if conf['model']['name'] == 'unet':
             conf['model']['decoder_attention_type'] = 'scse'

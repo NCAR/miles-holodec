@@ -296,7 +296,7 @@ class UpsamplingReader(Dataset):
         deweight=1e-3,  # deweighting applied to nonparticle pixels in weight mask
         pad=False,  # Only true when using full-sized images
         random_tile=False,
-        count_per_holo= 10,  # number of particles to train on from each hologram
+        count_per_holo=10,  # number of particles to train on from each hologram
         sig_z = 10,
         sig_x = 0,
         sig_y = 0,
@@ -432,14 +432,14 @@ class UpsamplingReader(Dataset):
                 count += 1
 
     def __getitem__(self, idx):
+        
         if self.shuffle:
             idx = random.choice(range(self.__len__()))
 
         h_idx, x_part, y_part, z_part, d_part = self.part_lst[idx]
         z_idx = np.argmin(np.abs(self.propagator.z_centers[self.z_bck_idx:-self.z_fwd_idx]-(z_part+np.random.randn()*self.sig_z)))
         z_idx += self.z_bck_idx
-        print(z_idx)
-        
+
         # h_idx, z_idx = self.indices[idx]
 
         # Select hologram

@@ -92,7 +92,7 @@ def load_model_and_optimizer(conf, model, device):
 
     # load optimizer and grad scaler states
     else:
-        ckpt = f"{save_loc}/checkpoint.pt" if conf["trainer"]["mode"] != "ddp" else f"{save_loc}/checkpoint_{device}.pt"
+        ckpt = f"{save_loc}/checkpoint.pt"
         checkpoint = torch.load(ckpt, map_location=device)
 
         if conf["trainer"]["mode"] == "fsdp":
@@ -162,10 +162,10 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     seed = 1000 if "seed" not in conf else conf["seed"]
     seed_everything(seed)
 
-    tile_size = int(conf["data"]["tile_size"])
-    step_size = int(conf["data"]["step_size"])
-    n_bins = int(conf["data"]["n_bins"])
-    lookahead = int(conf["data"]["lookahead"])
+    tile_size = int(conf["training_data"]["tile_size"])
+    step_size = int(conf["training_data"]["step_size"])
+    n_bins = int(conf["training_data"]["n_bins"])
+    lookahead = int(conf["training_data"]["lookahead"])
 
     epochs = conf["trainer"]["epochs"]
     start_epoch = (
@@ -180,20 +180,28 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     learning_rate = conf["trainer"]["learning_rate"]
     weight_decay = conf["trainer"]["weight_decay"]
 
-    train_dataset = UpsamplingReader(
-        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc", 
-        shuffle = False, 
-        device = device, 
-        n_bins = n_bins, 
-        transform = LoadTransformations(conf["transforms"]["training"]),
-        lookahead = lookahead, 
-        tile_size = tile_size, 
-        step_size = step_size,
-        output_lst = [torch.abs, torch.angle],
-        deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
-        random_tile=False,
-        sig_z = 3000,
-    )
+    # Complete the dataset configuration with missing parameters
+    conf["training_data"]["device"] = device
+    conf["training_data"]["transform"] = LoadTransformations(conf["transforms"]["training"])
+    conf["training_data"]["output_lst"] = [torch.abs, torch.angle]
+
+    # Create the UpsamplingReader using the updated configuration
+    train_dataset = UpsamplingReader(**conf["training_data"])
+
+    # train_dataset = UpsamplingReader(
+    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc", 
+    #     shuffle = True, 
+    #     device = device, 
+    #     n_bins = n_bins, 
+    #     transform = LoadTransformations(conf["transforms"]["training"]),
+    #     lookahead = lookahead, 
+    #     tile_size = tile_size, 
+    #     step_size = step_size,
+    #     output_lst = [torch.abs, torch.angle],
+    #     deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
+    #     random_tile = False,
+    #     sig_z = 3000,
+    # )
 
     # datasets 
     # train_dataset = LoadHolograms(
@@ -225,20 +233,27 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     #     pad=True
     # )
 
-    valid_dataset = UpsamplingReader(
-        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc", 
-        shuffle = False, 
-        device = device, 
-        n_bins = n_bins, 
-        transform = LoadTransformations(conf["transforms"]["validation"]),
-        lookahead = lookahead, 
-        tile_size = tile_size, 
-        step_size = step_size,
-        output_lst = [torch.abs, torch.angle],
-        deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
-        random_tile=False,
-        sig_z = 3000,
-    )
+    # valid_dataset = UpsamplingReader(
+    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc", 
+    #     shuffle = False, 
+    #     device = device, 
+    #     n_bins = n_bins, 
+    #     transform = LoadTransformations(conf["transforms"]["validation"]),
+    #     lookahead = lookahead, 
+    #     tile_size = tile_size, 
+    #     step_size = step_size,
+    #     output_lst = [torch.abs, torch.angle],
+    #     deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
+    #     random_tile=False,
+    #     sig_z = 3000,
+    # )
+
+    conf["validation_data"]["device"] = device
+    conf["validation_data"]["transform"] = LoadTransformations(conf["transforms"]["validation"])
+    conf["validation_data"]["output_lst"] = [torch.abs, torch.angle]
+
+    # Create the UpsamplingReader using the updated configuration
+    valid_dataset = UpsamplingReader(**conf["validation_data"])
 
     # setup the distributed sampler
     if distributed:
