@@ -98,7 +98,7 @@ class Trainer:
                     y_weight_mask = y_weight_mask.to(y_pred.device, y_pred.dtype)
 
                     mask_loss = criterion[0](y_part_mask, y_pred_mask)#, y_weight_mask)
-                    depth_loss = criterion[1](y_depth_mask, y_pred_depth)
+                    depth_loss = criterion[1](y_depth_mask*y_part_mask, y_pred_depth*y_part_mask)
 
                     # Mask metrics
                     for name, metric in metrics[0].items():
@@ -110,7 +110,7 @@ class Trainer:
 
                     # Depth metrics
                     for name, metric in metrics[1].items():
-                        value = metric(y_depth_mask, y_pred_depth)
+                        value = metric(y_depth_mask*y_part_mask, y_pred_depth*y_part_mask)
                         value = torch.Tensor([value]).cuda(self.device, non_blocking=True)
                         if distributed:
                             dist.all_reduce(value, dist.ReduceOp.AVG, async_op=False)
@@ -201,7 +201,7 @@ class Trainer:
                 y_weight_mask = y_weight_mask.to(y_pred.device, y_pred.dtype)
 
                 mask_loss = criterion[0](y_part_mask, y_pred[:, 0])
-                depth_loss = criterion[1](y_depth_mask, y_pred[:, 1])
+                depth_loss = criterion[1](y_depth_mask*y_part_mask, y_pred[:, 1]*y_part_mask)
 
                 # Mask metrics
                 for name, metric in metrics[0].items():
