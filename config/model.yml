@@ -1,22 +1,5 @@
 seed: 1000
-save_loc: "results/"
-
-# data:
-#     train_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc"
-#     validation_data: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc"
-#     tile_size: 512
-#     step_size: 128
-#     n_bins: 100
-#     lookahead: 5
-#     balance: true
-#     output_lst: null
-#     deweight: 0.001
-#     pad: false
-#     random_tile: false
-#     count_per_holo: 10
-#     sig_z: 10
-#     sig_x: 0
-#     sig_y: 0
+save_loc: "/glade/u/home/schreck/work/schreck/repos/miles-holodec/results/echo"
 
 training_data:
     file_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc"
@@ -97,7 +80,7 @@ trainer:
     learning_rate: 2.4575732726722595e-04 # 5.0e-04
     weight_decay: 0.0 # 1.0e-05
     start_epoch: 0
-    epochs: 100
+    epochs: 10
     amp: False
     grad_accum_every: 1
     grad_max_norm: 1.0
@@ -123,11 +106,11 @@ pbs: #derecho
     nodes: 1
     ncpus: 64
     ngpus: 4
-    mem: '480GB'
+    mem: '487GB'
     queue: 'preempt'
     
 # pbs: # casper
-#     conda: "/glade/work/schreck/miniconda3/envs/evidential"
+#     conda: "holodec"
 #     job_name: 'unet'
 #     nodes: 1
 #     ncpus: 8
