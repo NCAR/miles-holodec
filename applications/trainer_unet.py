@@ -153,6 +153,9 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
         setup(rank, world_size, conf["trainer"]["mode"])
         distributed = True
 
+    for update_key in ["n_bins", "lookahead", "sig_z"]:
+        conf["validation_data"][update_key] = conf["training_data"][update_key]
+
     # infer device id from rank
 
     device = torch.device(f"cuda:{rank % torch.cuda.device_count()}") if torch.cuda.is_available() else torch.device("cpu")
