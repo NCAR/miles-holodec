@@ -329,8 +329,9 @@ class UpsamplingReader(Dataset):
         )
 
         # rescale z sample variation based on the full depth
-        # of the images passed into the model
-        self.sig_z = sig_z/(self.propagator.z_centers[1]-self.propagator.z_centers[0])/self.lookahead
+        # of the images passed into the model.
+        # expects an input that is normalized to the lookahead volume depth
+        self.sig_z = sig_z*(self.propagator.z_centers[1]-self.propagator.z_centers[0])*self.lookahead
 
         self.transform = transform
         if self.transform is not None:
