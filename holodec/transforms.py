@@ -17,6 +17,19 @@ pre_waveprop_transformations = [
 
 def LoadTransformations(transform_config: str):
     tforms = []
+    if "Normalize" in transform_config:
+        mode = transform_config["Normalize"]["mode"]
+        tforms.append(Preprocess(mode))
+    if "PlanerNormalize" in transform_config:
+        mode = transform_config["PlanerNormalize"]["mode"]
+        tforms.append(PlanerPreprocess(mode))
+    if "ToTensor" in transform_config:
+        tforms.append(ToTensor())
+    if "GaussianNoise" in transform_config:
+        rate = transform_config["GaussianNoise"]["rate"]
+        noise = transform_config["GaussianNoise"]["noise"]
+        if rate > 0.0:
+            tforms.append(GaussianNoise(rate, noise))
     if "RandomVerticalFlip" in transform_config:
         rate = transform_config["RandomVerticalFlip"]["rate"]
         if rate > 0.0:
@@ -25,16 +38,6 @@ def LoadTransformations(transform_config: str):
         rate = transform_config["RandomVerticalFlip"]["rate"]
         if rate > 0.0:
             tforms.append(RandHorizontalFlip(rate))
-    if "Normalize" in transform_config:
-        mode = transform_config["Normalize"]["mode"]
-        tforms.append(Preprocess(mode))
-    if "GaussianNoise" in transform_config:
-        rate = transform_config["GaussianNoise"]["rate"]
-        noise = transform_config["GaussianNoise"]["noise"]
-        if rate > 0.0:
-            tforms.append(GaussianNoise(rate, noise))
-    if "ToTensor" in transform_config:
-        tforms.append(ToTensor())
     if "AdjustBrightness" in transform_config:
         rate = transform_config["AdjustBrightness"]["rate"]
         brightness = transform_config["AdjustBrightness"]["brightness_factor"]
@@ -61,7 +64,8 @@ class RandVerticalFlip(object):
     def __call__(self, sample):
         if torch.rand(1).item() < self.rate:
             sample['image'] = torch.flip(sample['image'], dims=[-1])
-            sample['mask'] = torch.flip(sample['mask'], dims=[-1])
+            if 'mask' in sample:
+                sample['mask'] = torch.flip(sample['mask'], dims=[-1])
         return sample
 
 
@@ -74,7 +78,8 @@ class RandHorizontalFlip(object):
     def __call__(self, sample):
         if torch.rand(1).item() < self.rate:
             sample['image'] = torch.flip(sample['image'], dims=[-2])
-            sample['mask'] = torch.flip(sample['mask'], dims=[-2])
+            if 'mask' in sample:
+                sample['mask'] = torch.flip(sample['mask'], dims=[-2])
         return sample
 
 
@@ -169,6 +174,49 @@ class Preprocess(object):
 
                 # Normalize angles for odd channels
                 image[i] = (1.0 + image[i] / torch.pi) / 2.0
+
+        sample["image"] = image
+        return sample
+
+
+class PlanerPreprocess(object):
+    """Normalize image"""
+
+    def __init__(self, mode="norm"):
+        if mode == "norm":
+            logger.info(
+                f"Loaded Normalize transformation that normalizes data in the range 0 to 1")
+        if mode == "stan":
+            logger.info(
+                f"Loaded Normalize transformation that standardizes data into z-scores")
+        if mode == "sym":
+            logger.info(
+                f"Loaded Normalize transformation that normalizes data in the range -1 to 1")
+        if mode == "255":
+            logger.info(
+                f"Loaded Normalize transformation that normalizes data color channel by dividing by 255.0 and phase pi")
+        self.mode = mode
+
+    def __call__(self, sample):
+
+        image = sample['image']  # .astype(np.float32)
+
+        if self.mode == "norm":
+            image -= image.min()
+            image /= image.max()
+
+        if self.mode == "stan":
+            image -= image.mean()
+            image /= image.std()
+
+        if self.mode == "sym":
+            image = -1 + 2.0*(image - image.min())/(image.max() - image.min())
+
+        if self.mode == "255":
+            #image /= 255.0
+            image[0] /= 255.0
+            if image.shape[0] > 1:
+                image[1] = (1.0 + image[1] / np.pi) / 2.0
 
         sample["image"] = image
         return sample

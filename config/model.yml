@@ -5,7 +5,7 @@ training_data:
     file_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc"
     n_bins: 1000
     shuffle: true
-    lookahead: 5
+    lookahead: 0
     tile_size: 512
     step_size: 128
     balance: true
@@ -21,7 +21,7 @@ validation_data:
     file_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc"
     n_bins: 1000
     shuffle: false
-    lookahead: 5
+    lookahead: 0
     tile_size: 512
     step_size: 128
     balance: true

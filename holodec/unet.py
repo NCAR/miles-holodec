@@ -103,3 +103,64 @@ class SegmentationModel(torch.nn.Module):
             "model_state_dict": self.state_dict(),
         }
         torch.save(state_dict, f"{save_loc}/checkpoint.pt")
+
+
+class PlanerSegmentationModel(torch.nn.Module):
+
+    def __init__(self, conf):
+
+        super(PlanerSegmentationModel, self).__init__()
+
+        if conf['model']['name'] == 'unet':
+            conf['model']['decoder_attention_type'] = 'scse'
+        conf['model']['in_channels'] = 1
+        conf['model']['classes'] = 1 # Mask
+        self.activations = torch.nn.ModuleList([torch.nn.Sigmoid(), torch.nn.Identity()])
+        self.model = load_model(conf['model'])
+
+    def forward(self, x):
+        x = self.model(x)
+        return x
+
+    @classmethod
+    def load_model(cls, conf):
+        save_loc = conf['save_loc']
+        ckpt = f"{save_loc}/checkpoint.pt" if conf["trainer"]["mode"] != "ddp" else f"{save_loc}/checkpoint_cuda:0.pt"
+
+        if not os.path.isfile(ckpt):
+            raise ValueError(
+                "No saved checkpoint exists. You must train a model first. Exiting."
+            )
+
+        logging.info(
+            f"Loading a model with pre-trained weights from path {ckpt}"
+        )
+
+        checkpoint = torch.load(ckpt)
+
+        model_class = cls(**conf["model"])
+
+        if conf["trainer"]["mode"] == "fsdp":
+            FSDP.set_state_dict_type(
+                model_class,
+                StateDictType.SHARDED_STATE_DICT,
+            )
+            state_dict = {
+                "model_state_dict": model_class.state_dict(),
+            }
+            DCP.load_state_dict(
+                state_dict=state_dict,
+                storage_reader=DCP.FileSystemReader(os.path.join(save_loc, "checkpoint")),
+            )
+            model_class.load_state_dict(state_dict["model_state_dict"])
+        else:
+            model_class.load_state_dict(checkpoint["model_state_dict"])
+
+        return model_class
+
+    def save_model(self, conf):
+        save_loc = conf['save_loc']
+        state_dict = {
+            "model_state_dict": self.state_dict(),
+        }
+        torch.save(state_dict, f"{save_loc}/checkpoint.pt")

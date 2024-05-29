@@ -24,9 +24,9 @@ from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from torch.distributed.fsdp.wrap import (
     size_based_auto_wrap_policy,
 )
-from holodec.unet import SegmentationModel
-from holodec.datasets import LoadHolograms, UpsamplingReader
-from holodec.trainer import Trainer
+from holodec.unet import PlanerSegmentationModel as SegmentationModel
+from holodec.planer_datasets import LoadHolograms, UpsamplingReader
+from holodec.planer_trainer import Trainer
 from holodec.pbs import launch_script, launch_script_mpi
 from holodec.seed import seed_everything
 from holodec.losses import load_loss
@@ -148,9 +148,6 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
         setup(rank, world_size, conf["trainer"]["mode"])
         distributed = True
 
-    for update_key in ["n_bins", "lookahead", "sig_z"]:
-        conf["validation_data"][update_key] = conf["training_data"][update_key]
-
     # infer device id from rank
 
     device = torch.device(f"cuda:{rank % torch.cuda.device_count()}") if torch.cuda.is_available() else torch.device("cpu")
@@ -160,83 +157,25 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     seed = 1000 if "seed" not in conf else conf["seed"]
     seed_everything(seed)
 
+    # Set up training and validation file names. Use the prefix to use style-augmented data sets
     train_batch_size = conf["trainer"]["train_batch_size"]
     valid_batch_size = conf["trainer"]["valid_batch_size"]
 
     # Complete the dataset configuration with missing parameters
-    conf["training_data"]["device"] = device
-    conf["training_data"]["transform"] = LoadTransformations(conf["transforms"]["training"])
-    conf["training_data"]["output_lst"] = [torch.abs, torch.angle]
+    train_transforms = LoadTransformations(conf["transforms"]["training"])
+    valid_transforms = LoadTransformations(conf["transforms"]["validation"])
 
     # Create the UpsamplingReader using the updated configuration
-    train_dataset = UpsamplingReader(**conf["training_data"])
-
-    # train_dataset = UpsamplingReader(
-    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc",
-    #     shuffle = True,
-    #     device = device,
-    #     n_bins = n_bins,
-    #     transform = LoadTransformations(conf["transforms"]["training"]),
-    #     lookahead = lookahead,
-    #     tile_size = tile_size,
-    #     step_size = step_size,
-    #     output_lst = [torch.abs, torch.angle],
-    #     deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
-    #     random_tile = False,
-    #     sig_z = 3000,
-    # )
-
-    # datasets
-    # train_dataset = LoadHolograms(
-    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc",
-    #     shuffle = False,
-    #     device = device,
-    #     n_bins = n_bins,
-    #     transform = LoadTransformations(conf["transforms"]["training"]),
-    #     lookahead = lookahead,
-    #     tile_size = tile_size,
-    #     step_size = step_size,
-    #     output_lst = [torch.abs, torch.angle],
-    #     deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
-    #     random_tile=True
-    # )
-
-    # valid_dataset = LoadHolograms(
-    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc",
-    #     shuffle = False,
-    #     device = device,
-    #     n_bins = n_bins,
-    #     transform = LoadTransformations(conf["transforms"]["validation"]),
-    #     lookahead = lookahead,
-    #     tile_size = tile_size,
-    #     step_size = step_size,
-    #     output_lst = [torch.abs, torch.angle],
-    #     deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
-    #     #random_tile=True
-    #     pad=True
-    # )
-
-    # valid_dataset = UpsamplingReader(
-    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc",
-    #     shuffle = False,
-    #     device = device,
-    #     n_bins = n_bins,
-    #     transform = LoadTransformations(conf["transforms"]["validation"]),
-    #     lookahead = lookahead,
-    #     tile_size = tile_size,
-    #     step_size = step_size,
-    #     output_lst = [torch.abs, torch.angle],
-    #     deweight = 1e-6,  # amount to deweight empty pixels in the loss function (through the weight mask)
-    #     random_tile=False,
-    #     sig_z = 3000,
-    # )
-
-    conf["validation_data"]["device"] = device
-    conf["validation_data"]["transform"] = LoadTransformations(conf["transforms"]["validation"])
-    conf["validation_data"]["output_lst"] = [torch.abs, torch.angle]
-
-    # Create the UpsamplingReader using the updated configuration
-    valid_dataset = UpsamplingReader(**conf["validation_data"])
+    train_dataset = UpsamplingReader(
+        conf,
+        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc",
+        train_transforms
+    )
+    valid_dataset = UpsamplingReader(
+        conf,
+        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc",
+        valid_transforms
+    )
 
     # setup the distributed sampler
     if distributed:
@@ -306,20 +245,11 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
 
     # Train and validation losses
 
-    train_criterion = [
-        load_loss(conf["loss"]["training_loss_mask"], split="mask train"),
-        load_loss(conf["loss"]["training_loss_depth"], split="depth train")
-    ]
-    valid_criterion = [
-        load_loss(conf["loss"]["validation_loss_mask"], split="mask valid"),
-        load_loss(conf["loss"]["validation_loss_depth"], split="depth valid")
-    ]
+    train_criterion = load_loss(conf["loss"]["training_loss_mask"], split="mask train")
+    valid_criterion = load_loss(conf["loss"]["validation_loss_mask"], split="mask valid")
     # Set up some metrics
 
-    metrics = [
-        {"dice": load_loss("dice", split="mask metric")},  # Mask metrics
-        {"mae": load_loss("mae", split="depth metric")}  # Depth metrics
-    ]
+    metrics = {"dice": load_loss("dice", split="mask metric")}  # Mask metrics
 
     # Initialize a trainer object
 
@@ -359,7 +289,7 @@ class Objective(BaseObjective):
                     f"Pruning trial {trial.number} due to CUDA memory overflow: {str(E)}."
                 )
                 raise E
-                # raise optuna.TrialPruned()
+                #raise optuna.TrialPruned()
             else:
                 logging.warning(f"Trial {trial.number} failed due to error: {str(E)}.")
                 raise E
