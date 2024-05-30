@@ -16,7 +16,8 @@ def load_loss(loss_name, split="training", reduction='mean'):
     supported = [
         "dice", "dice-bce", "iou", "focal", "tyversky",
         "focal-tyversky", "combo", "mse", "msle", "mae",
-        "huber", "logcosh", "xtanh", "xsigmoid"
+        "huber", "logcosh", "xtanh", "xsigmoid", 
+        "intersectedmse", "intersectedmae"
     ]
 
     logger.info(f"Loading {split} loss function {loss_name}")
@@ -49,6 +50,10 @@ def load_loss(loss_name, split="training", reduction='mean'):
         return XTanhLoss(reduction=reduction)
     elif loss_name == "xsigmoid":
         return XSigmoidLoss(reduction=reduction)
+    elif loss_name.lower() == 'intersectedmse':
+        return IntersectedMSE()
+    elif loss_name.lower() == 'intersectedmae':
+        return IntersectedMAE()
     else:
         raise OSError(
             f"Loss name {loss_name} not recognized. Please choose from {supported}")
@@ -286,3 +291,23 @@ class MSLELoss(nn.Module):
         log_target = torch.log(target.abs() + 1)
         loss = F.mse_loss(log_prediction, log_target, reduction=self.reduction)
         return loss
+
+class IntersectedMSE(torch.nn.Module):
+    def __init__(self, alpha=0.5):
+        super().__init__()
+        self.alpha = alpha
+
+    def forward(self, y_t, y_est, m_t, m_est):
+        weight = torch.sum(m_t*m_est,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1)
+        y_error = (y_t-y_est)**2
+        return torch.sum((1-self.alpha*weight)*torch.sum(m_t*y_error,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1))+torch.sum(self.alpha*weight*torch.sum(m_est*y_error,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1))
+    
+class IntersectedMAE(torch.nn.Module):
+    def __init__(self, alpha=0.5):
+        super().__init__()
+        self.alpha = alpha
+
+    def forward(self, y_t, y_est, m_t, m_est):
+        weight = torch.sum(m_t*m_est,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1e-10)
+        y_error = torch.abs(y_t-y_est)
+        return torch.sum((1-self.alpha*weight)*torch.sum(m_t*y_error,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1))+torch.sum(self.alpha*weight*torch.sum(m_est*y_error,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1))
