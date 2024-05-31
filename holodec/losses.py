@@ -293,21 +293,25 @@ class MSLELoss(nn.Module):
         return loss
 
 class IntersectedMSE(torch.nn.Module):
-    def __init__(self, alpha=0.5):
+    def __init__(self, alpha=1.0,beta=30):
         super().__init__()
         self.alpha = alpha
+        self.beta = beta
 
     def forward(self, y_t, y_est, m_t, m_est):
-        weight = torch.sum(m_t*m_est,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1)
+        # weight = torch.sum(m_t*m_est,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1e-10)
+        weight = torch.exp(self.beta*(torch.sum(m_t*m_est,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1e-10)-1))
         y_error = (y_t-y_est)**2
         return torch.sum((1-self.alpha*weight)*torch.sum(m_t*y_error,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1))+torch.sum(self.alpha*weight*torch.sum(m_est*y_error,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1))
     
 class IntersectedMAE(torch.nn.Module):
-    def __init__(self, alpha=0.5):
+    def __init__(self, alpha=1.0,beta=30):
         super().__init__()
         self.alpha = alpha
+        self.beta = beta
 
     def forward(self, y_t, y_est, m_t, m_est):
-        weight = torch.sum(m_t*m_est,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1e-10)
+        # weight = torch.sum(m_t*m_est,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1e-10)
+        weight = torch.exp(self.beta*(torch.sum(m_t*m_est,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1e-10)-1))
         y_error = torch.abs(y_t-y_est)
         return torch.sum((1-self.alpha*weight)*torch.sum(m_t*y_error,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1))+torch.sum(self.alpha*weight*torch.sum(m_est*y_error,dim=(1,2))/(torch.sum(m_t,dim=(1,2))+1))
