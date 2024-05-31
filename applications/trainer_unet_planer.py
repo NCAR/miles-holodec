@@ -25,13 +25,17 @@ from torch.distributed.fsdp.wrap import (
     size_based_auto_wrap_policy,
 )
 from holodec.unet import PlanerSegmentationModel as SegmentationModel
-from holodec.planer_datasets import LoadHolograms, UpsamplingReader
+#from holodec.planer_datasets import LoadHolograms, UpsamplingReader
 from holodec.planer_trainer import Trainer
 from holodec.pbs import launch_script, launch_script_mpi
 from holodec.seed import seed_everything
 from holodec.losses import load_loss
-from holodec.transforms import LoadTransformations
+#from holodec.planer_transforms import LoadTransformations
 from holodec.scheduler import load_scheduler
+
+from holodecml.data import PickleReader, UpsamplingReader
+from holodecml.transforms import LoadTransformations
+
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -89,6 +93,7 @@ def load_model_and_optimizer(conf, model, device):
     else:
         ckpt = f"{save_loc}/checkpoint.pt"
         checkpoint = torch.load(ckpt, map_location=device)
+        print(checkpoint.keys())
 
         if conf["trainer"]["mode"] == "fsdp":
             logging.info(f"Loading FSDP model, optimizer, grad scaler, and learning rate scheduler states from {save_loc}")
@@ -136,7 +141,8 @@ def load_model_and_optimizer(conf, model, device):
         scheduler = load_scheduler(optimizer, conf)
         scaler = ShardedGradScaler(enabled=amp) if conf["trainer"]["mode"] == "fsdp" else GradScaler(enabled=amp)
 
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        if scheduler and checkpoint['scheduler_state_dict']:
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         scaler.load_state_dict(checkpoint['scaler_state_dict'])
 
     return model, optimizer, scheduler, scaler
@@ -166,16 +172,49 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     valid_transforms = LoadTransformations(conf["transforms"]["validation"])
 
     # Create the UpsamplingReader using the updated configuration
-    train_dataset = UpsamplingReader(
-        conf,
-        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc",
-        train_transforms
+
+    tile_size = 512
+    step_size = 128
+    data_path = "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic"
+    total_positive = 6
+    total_negative = 6
+    total_examples = 100000
+    transform_mode = 'None'
+    # Set up training and validation file names. Use the prefix to use style-augmented data sets
+    name_tag = f"{tile_size}_{step_size}_{total_positive}_{total_negative}_{total_examples}_{transform_mode}"
+    fn_train = f"{data_path}/train_{name_tag}.pkl"
+    fn_valid = f"{data_path}/valid_{name_tag}.pkl"
+
+    # train_dataset = XarrayReader(fn_train, train_transforms, mode="mask")
+    # valid_dataset = XarrayReader(fn_valid, valid_transforms, mode="mask")
+
+    train_dataset = PickleReader(
+        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/training_512_128_6_6_100000_None.pkl",
+        transform=train_transforms,
+        max_images=int(0.8 * conf["data"]["total_training"]),
+        max_buffer_size=int(0.1 * conf["data"]["total_training"]),
+        color_dim=1,
+        shuffle=True
     )
-    valid_dataset = UpsamplingReader(
-        conf,
-        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc",
-        valid_transforms
+    valid_dataset = PickleReader(
+        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/validation_512_128_6_6_100000_None.pkl",
+        transform=train_transforms,
+        max_images=int(0.8 * conf["data"]["total_training"]),
+        max_buffer_size=int(0.1 * conf["data"]["total_training"]),
+        color_dim=1,
+        shuffle=False
     )
+
+    # train_dataset = UpsamplingReader(
+    #     conf,
+    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc",
+    #     train_transforms
+    # )
+    # valid_dataset = UpsamplingReader(
+    #     conf,
+    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc",
+    #     valid_transforms
+    # )
 
     # setup the distributed sampler
     if distributed:
