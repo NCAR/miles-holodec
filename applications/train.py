@@ -267,6 +267,9 @@ def main(rank, world_size, conf, mode="ddp", trial=False):
                 batch_group_generator.set_description(to_print)
                 batch_group_generator.update()
 
+                if k >= valid_batches_per_epoch and k > 0:
+                    break
+
             # Shutdown the progbar
             batch_group_generator.close()
 
