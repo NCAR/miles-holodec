@@ -113,9 +113,6 @@ class PlanerSegmentationModel(torch.nn.Module):
 
         if conf['model']['name'] == 'unet':
             conf['model']['decoder_attention_type'] = 'scse'
-        conf['model']['in_channels'] = 1
-        conf['model']['classes'] = 1 # Mask
-        self.activations = torch.nn.ModuleList([torch.nn.Sigmoid(), torch.nn.Identity()])
         self.model = load_model(conf['model'])
 
     def forward(self, x):
