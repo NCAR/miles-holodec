@@ -116,7 +116,7 @@ class Trainer:
                             dist.all_reduce(value, dist.ReduceOp.AVG, async_op=False)
                         results_dict[f"train_{name}"].append(value[0].item())
 
-                    loss = mask_loss + depth_loss
+                    loss = mask_loss + conf['loss'].get('training_loss_depth_mult',1.0)*depth_loss
 
                     scaler.scale(loss / grad_accum_every).backward()
 
@@ -219,7 +219,7 @@ class Trainer:
                         dist.all_reduce(value, dist.ReduceOp.AVG, async_op=False)
                     results_dict[f"valid_{name}"].append(value[0].item())
 
-                loss = (mask_loss + depth_loss).mean()
+                loss = (mask_loss + conf['loss'].get('validation_loss_depth_mult',1.0)*depth_loss).mean()
 
                 for key, _loss in zip(["loss", "mask_loss", "depth_loss"], [loss, mask_loss, depth_loss]):
                     batch_loss = torch.Tensor([_loss.mean().item()]).cuda(self.device)
@@ -426,9 +426,9 @@ class Trainer:
                 df.to_csv(f"{save_loc}/training_log.csv", index=False)
 
             # Report result to the trial
-            #if trial:
-                # trial.report
-                #pass
+            if trial:
+                trial.report
+                pass
 
             # Stop training if we have not improved after X epochs (stopping patience)
             best_epoch = [
@@ -438,7 +438,8 @@ class Trainer:
             ][0]
             offset = epoch - best_epoch
             if offset >= conf['trainer']['stopping_patience']:
-                logging.info(f"Trial {trial.number} is stopping early")
+                if trial:
+                    logging.info(f"Trial {trial.number} is stopping early")  # TODO this throws an error reporting trial is a bool
                 break
 
         best_epoch = [

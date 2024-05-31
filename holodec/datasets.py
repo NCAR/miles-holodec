@@ -304,7 +304,7 @@ class UpsamplingReader(Dataset):
     ):
 
         self.count_per_holo = count_per_holo
-        self.sig_z = sig_z  # variance in z in microns
+        # self.sig_z = sig_z # variance in z in microns
         self.sig_x = sig_x  # variance in z in microns
         self.sig_y = sig_y  # variance in z in microns
 
@@ -328,6 +328,12 @@ class UpsamplingReader(Dataset):
             step_size=step_size,
             tile_size=tile_size,
         )
+
+        # rescale z sample variation based on the full depth
+        # of the images passed into the model.
+        # expects an input that is normalized to the lookahead volume depth
+        self.sig_z = sig_z*(self.propagator.z_centers[1]-self.propagator.z_centers[0])*self.lookahead
+
         self.transform = transform
         if self.transform is not None:
             self.pre_waveprop_transformations = pre_waveprop_transformations
