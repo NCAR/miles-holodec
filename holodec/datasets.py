@@ -4,6 +4,7 @@ from holodec.propagation import WavePropagator
 import yaml
 import torch
 import numpy as np
+import xarray as xr
 import random
 import math
 
@@ -186,7 +187,7 @@ class LoadHolograms(Dataset):
         return image
 
     def _apply_output_functions(self, image):
-        image = image.to(dtype=torch.complex64) # as of v2.2.0 abs and angle do not support complex128
+        image = image.to(dtype=torch.complex64)  # as of v2.2.0 abs and angle do not support complex128
         ch_lst = [fnc(image) for fnc in self.output_lst]
         in_channels = torch.cat(ch_lst, dim=1)  # Stack the channels along the z-planes
         return in_channels
@@ -211,7 +212,7 @@ class LoadHolograms(Dataset):
         num_particles = 0
 
         # find particles that are contained between the first and last planes
-        cond = np.where((z_part >= self.propagator.z_centers[z_idx-self.z_bck_idx]) & \
+        cond = np.where((z_part >= self.propagator.z_centers[z_idx-self.z_bck_idx]) &
                         (z_part <= self.propagator.z_centers[z_idx+self.z_fwd_idx]))
 
         # if z_idx in z_indices:
@@ -224,7 +225,7 @@ class LoadHolograms(Dataset):
 
             # Build the UNET mask using vectorized operations
             for part_idx in range(len(cond[0])):
-                z_diff = z_part[part_idx] - self.propagator.z_centers[z_idx] # z distance from reference plane
+                z_diff = z_part[part_idx] - self.propagator.z_centers[z_idx]  # z distance from reference plane
                 y_diff = (self.propagator.y_arr[None, :] * 1e6 - y_part[part_idx])
                 x_diff = (self.propagator.x_arr[:, None] * 1e6 - x_part[part_idx])
                 d_squared = (d_part[part_idx] / 2)**2
@@ -269,7 +270,7 @@ class LoadHolograms(Dataset):
         pad_width = max(target_width - current_width, 0)
 
         # Pad the image_stack
-        mean_image = 0 #torch.mean(image_stack)
+        mean_image = 0  # torch.mean(image_stack)
         padded_image_stack = torch.nn.functional.pad(image_stack, (0, pad_width, 0, pad_height), mode='constant', value=mean_image)
 
         # Pad the mask
@@ -297,15 +298,15 @@ class UpsamplingReader(Dataset):
         pad=False,  # Only true when using full-sized images
         random_tile=False,
         count_per_holo=10,  # number of particles to train on from each hologram
-        sig_z = 10,
-        sig_x = 0,
-        sig_y = 0,
+        sig_z=10,
+        sig_x=0,
+        sig_y=0,
     ):
 
         self.count_per_holo = count_per_holo
         # self.sig_z = sig_z # variance in z in microns
-        self.sig_x = sig_x # variance in z in microns
-        self.sig_y = sig_y # variance in z in microns
+        self.sig_x = sig_x  # variance in z in microns
+        self.sig_y = sig_y  # variance in z in microns
 
         # num of waveprop windows
         self.n_bins = n_bins
@@ -343,7 +344,7 @@ class UpsamplingReader(Dataset):
             hid_mask = self.propagator.h_ds["hid"] == hid
             hid_p_idx = np.where(hid_mask)[0]
 
-            idx_arr = np.random.choice(hid_p_idx,size=self.count_per_holo,replace=False)
+            idx_arr = np.random.choice(hid_p_idx, size=self.count_per_holo, replace=False)
 
             # Filter particles based on h_idx
             x_part = self.propagator.h_ds["x"].values[idx_arr]
@@ -355,16 +356,13 @@ class UpsamplingReader(Dataset):
             self.part_lst.extend([
              (h_idx,) + pdat for pdat in zip(x_part, y_part, z_part, d_part)
             ])
-            
+
             # self.indices.append([(x,y,z,d)])
             # self.indices.append((h_idx*np.ones(idx_arr.size), x_part, y_part, z_part, d_part))
 
             # x_part = self.propagator.h_ds["x"].values[idx_arr] + np.random.randn(len(idx_arr))*self.sig_x
             # y_part = self.propagator.h_ds["y"].values[idx_arr] + np.random.randn(len(idx_arr))*self.sig_y
             # z_part = self.propagator.h_ds["z"].values[idx_arr] + np.random.randn(len(idx_arr))*self.sig_z
-
-            
-
 
         # self.indices = [
         #     (x, y)
@@ -438,7 +436,7 @@ class UpsamplingReader(Dataset):
                 count += 1
 
     def __getitem__(self, idx):
-        
+
         if self.shuffle:
             idx = random.choice(range(self.__len__()))
 
@@ -503,12 +501,12 @@ class UpsamplingReader(Dataset):
         else:
             rand_x = np.random.randn()*self.sig_x
             rand_y = np.random.randn()*self.sig_y
-            dist_2 = np.sum((np.array(list(self.idx2center.values())) - 1e-6*np.array([[x_part+rand_x,y_part+rand_y]]))**2,axis=1)
+            dist_2 = np.sum((np.array(list(self.idx2center.values())) - 1e-6*np.array([[x_part+rand_x, y_part+rand_y]]))**2, axis=1)
             min_idx = np.argmin(dist_2)
             x_slice = self.idx2slice[min_idx][0]
             y_slice = self.idx2slice[min_idx][1]
             return in_channels[..., x_slice, y_slice].squeeze(0), part_mask[x_slice, y_slice], depth_mask[x_slice, y_slice], weight_mask[x_slice, y_slice]
-                
+
         return in_channels.squeeze(0), part_mask, depth_mask, weight_mask
 
     def _propagate_hologram(self, image, z_idx):
@@ -520,7 +518,7 @@ class UpsamplingReader(Dataset):
         return image
 
     def _apply_output_functions(self, image):
-        image = image.to(dtype=torch.complex64) # as of v2.2.0 abs and angle do not support complex128
+        image = image.to(dtype=torch.complex64)  # as of v2.2.0 abs and angle do not support complex128
         ch_lst = [fnc(image) for fnc in self.output_lst]
         in_channels = torch.cat(ch_lst, dim=1)  # Stack the channels along the z-planes
         return in_channels
@@ -545,7 +543,7 @@ class UpsamplingReader(Dataset):
         num_particles = 0
 
         # find particles that are contained between the first and last planes
-        cond = np.where((z_part >= self.propagator.z_centers[z_idx-self.z_bck_idx]) & \
+        cond = np.where((z_part >= self.propagator.z_centers[z_idx-self.z_bck_idx]) &
                         (z_part <= self.propagator.z_centers[z_idx+self.z_fwd_idx]))
 
         # if z_idx in z_indices:
@@ -558,7 +556,7 @@ class UpsamplingReader(Dataset):
 
             # Build the UNET mask using vectorized operations
             for part_idx in range(len(cond[0])):
-                z_diff = z_part[part_idx] - self.propagator.z_centers[z_idx] # z distance from reference plane
+                z_diff = z_part[part_idx] - self.propagator.z_centers[z_idx]  # z distance from reference plane
                 y_diff = (self.propagator.y_arr[None, :] * 1e6 - y_part[part_idx])
                 x_diff = (self.propagator.x_arr[:, None] * 1e6 - x_part[part_idx])
                 d_squared = (d_part[part_idx] / 2)**2
@@ -603,7 +601,7 @@ class UpsamplingReader(Dataset):
         pad_width = max(target_width - current_width, 0)
 
         # Pad the image_stack
-        mean_image = 0 #torch.mean(image_stack)
+        mean_image = 0  # torch.mean(image_stack)
         padded_image_stack = torch.nn.functional.pad(image_stack, (0, pad_width, 0, pad_height), mode='constant', value=mean_image)
 
         # Pad the mask
@@ -614,11 +612,76 @@ class UpsamplingReader(Dataset):
         return padded_image_stack, padded_mask1, padded_mask2, padded_mask3
 
 
+class XarrayReader(Dataset):
+
+    def __init__(self,
+                 fn,
+                 transform=False,
+                 mode="mask",
+                 color_dim=1,
+                 upsample=False):
+
+        self.ds = xr.open_dataset(fn)
+        self.transform = transform
+        self.mode = mode
+        self.color_dim = color_dim
+        self.upsample = upsample
+
+        if "x1" in self.ds.dims:
+            if self.mode == "mask":
+                self.ds = self.ds.rename_dims({"k": "n"})
+                self.ds = self.ds.rename_vars({"x": "var_x", "y": "var_y"})
+            else:
+                self.ds = self.ds.rename_dims({"k": "n"})
+                self.ds = self.ds.rename_vars({"x": "var_x", "y": "var_z"})
+
+    def __getitem__(self, idx):
+
+        image = self.ds.var_x[idx].values
+
+        if len(image.shape) == 2:
+            image = np.expand_dims(image, 0)
+        elif len(image.shape) == 3:
+            image = image[:self.color_dim, :, :]
+        elif len(image.shape) == 4:
+            image = image[:, :self.color_dim, :, :]
+
+        if self.mode == "mask":
+            label = self.ds.var_y[idx].values
+        else:  # binary labels
+            label = self.ds.var_z[idx].values
+
+        im = {
+            "image": image,
+            "horizontal_flip": False,
+            "vertical_flip": False
+        }
+
+        if self.transform:
+            for image_transform in self.transform:
+                im = image_transform(im)
+        image = im["image"]
+
+        # Update the mask if we flipped the original image
+        if self.mode == "mask":
+            if im["horizontal_flip"]:
+                label = np.flip(label, axis=0)
+            if im["vertical_flip"]:
+                label = np.flip(label, axis=1)
+
+        image = torch.tensor(image, dtype=torch.float)
+        label = torch.tensor(label.copy(), dtype=torch.int)
+        return (image, label)
+
+    def __len__(self):
+        return len(self.ds.n)
+
+
 if __name__ == "__main__":
     with open("/glade/work/schreck/repos/HOLO/dev/holodec-ml/results/manopt/model.yml") as cf:
         conf = yaml.load(cf, Loader=yaml.FullLoader)
 
-    lookahead = 0 #int(conf["data"]["lookahead"])
+    lookahead = 0  # int(conf["data"]["lookahead"])
     conf["model"]["in_channels"] = 2 * (lookahead + 1)
 
     n_bins = int(conf["data"]["n_bins"])
