@@ -1,142 +1,90 @@
-seed: 1000
-save_loc: "/glade/u/home/schreck/work/schreck/repos/miles-holodec/results/echo"
-
-training_data:
-    file_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc"
-    n_bins: 1000
-    shuffle: true
-    lookahead: 0
-    tile_size: 512
-    step_size: 128
-    balance: true
-    deweight: 0.001
-    pad: false
-    random_tile: false
-    count_per_holo: 10
-    sig_z: 3000
-    sig_x: 0
-    sig_y: 0
-
-validation_data:
-    file_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc"
-    n_bins: 1000
-    shuffle: false
-    lookahead: 0
-    tile_size: 512
-    step_size: 128
-    balance: true
-    deweight: 0.001
-    pad: false
-    random_tile: false
-    count_per_holo: 10
-    sig_z: 3000
-    sig_x: 0
-    sig_y: 0
-
-transforms:
-    training:
-        # RandomVerticalFlip:
-        #     rate: 0.5
-        # RandomHorizontalFlip: 
-        #     rate: 0.5
-        Normalize:
-            mode: '255'
-        # GaussianBlur:
-        #     rate: 1.0
-        #     kernel_size: 1
-        #     sigma: 2.1252219359742823
-        # GaussianNoise:
-        #     rate: 1.0
-        #     noise: 0.3258530643453389
-        # AdjustBrightness:
-        #     rate: 1.0
-        #     brightness_factor: 1.269735791766263
-    validation:
-        Normalize:
-            mode: '255'
-    inference:
-        Normalize:
-            mode: '255'   
-            
+loss:
+  training_loss_depth: intersectedmae # mae # mse
+  training_loss_mask: focal-tyversky
+  training_loss_depth_mult: 0.03 # 300.0
+  validation_loss_depth: intersectedmae # mae
+  validation_loss_mask: dice
+  validation_loss_depth_mult: 0.03 # 300.0
 model:
-    name: "linknet"
-    encoder_name: "xception"
-    encoder_weights: "imagenet"
-    in_channels: 1
-    classes: 1
-
-loss: 
-    training_loss_mask: "focal-tyversky"
-    training_loss_depth: "mse"
-    validation_loss_mask: "dice"
-    validation_loss_depth: "mae"
-
+  classes: 1
+  encoder_name: resnet50 # efficientnet-b0, resnet50
+  encoder_weights: imagenet
+  in_channels: 1
+  name: fpn
+pbs:
+  conda: holodec
+  job_name: holodec
+  mem: 487GB
+  ncpus: 64
+  ngpus: 4
+  nodes: 1
+  project: NEOL0007
+  queue: preempt
+  walltime: '12:00:00'
+save_loc: /glade/derecho/scratch/mhayman/miles-holodec/results_weighted_11 # /glade/u/home/schreck/work/schreck/repos/miles-holodec/results/echo
+seed: 1000
 trainer:
-    mode: "none" # none, ddp, fsdp
-    train_batch_size: 4
-    valid_batch_size: 4
-    batches_per_epoch: 500 # Set to 0 to use len(dataloader)
-    valid_batches_per_epoch: 100
-    learning_rate: 2.4575732726722595e-04 # 5.0e-04
-    weight_decay: 0.0 # 1.0e-05
-    start_epoch: 0
-    epochs: 10
-    amp: False
-    grad_accum_every: 1
-    grad_max_norm: 1.0
-    thread_workers: 4
-    valid_thread_workers: 4
-    stopping_patience: 4
-    use_scheduler: True
-    scheduler: {
-        scheduler_type: 'cosine-annealing', 
-        first_cycle_steps: 500, 
-        cycle_mult: 6.0, 
-        max_lr: 2.4575732726722595e-04, 
-        min_lr: 2.4575732726722595e-07, 
-        warmup_steps: 499, 
-        gamma: 0.7
-        }
-
-pbs: #derecho
-    conda: "holodec"
-    project: "NAML0001"
-    job_name: "holodec"
-    walltime: "12:00:00"
-    nodes: 1
-    ncpus: 64
-    ngpus: 4
-    mem: '487GB'
-    queue: 'preempt'
-    
-# pbs: # casper
-#     conda: "holodec"
-#     job_name: 'unet'
-#     nodes: 1
-#     ncpus: 8
-#     ngpus: 1
-#     mem: '128GB'
-#     walltime: '12:00:00'
-#     gpu_type: 'a100'
-#     project: 'NAML0001'
-#     queue: 'casper'
-    
-# inference:
-#     mode: "mask"
-#     batch_size: 16
-#     n_nodes: 4
-#     gpus_per_node: 1
-#     threads_per_gpu: 2
-#     save_arrays: True
-#     save_probs: False
-#     probability_threshold: 0.5
-#     plot: False
-#     verbose: False
-#     data_set:
-# #         path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_test.nc"
-# #         name: "synthetic"
-#         path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/real_holograms_CSET_RF07_20150719_200000-210000.nc"
-#         name: "real"
-#         holograms:
-#             min: 10
-#             max: 20
+  amp: false
+  batches_per_epoch: 500
+  epochs: 50 # 10
+  grad_accum_every: 1
+  grad_max_norm: 1.0
+  learning_rate: 0.0012922035172040743
+  mode: none
+  scheduler:
+    cycle_mult: 6.0
+    first_cycle_steps: 500
+    gamma: 0.7
+    max_lr: 0.00024575732726722595
+    min_lr: 1.e-7 # 2.4575732726722597e-07
+    scheduler_type: cosine-annealing
+    warmup_steps: 499
+  start_epoch: 0
+  stopping_patience: 4
+  thread_workers: 4
+  train_batch_size: 4
+  use_scheduler: true
+  valid_batch_size: 4
+  valid_batches_per_epoch: 100
+  valid_thread_workers: 4
+  weight_decay: 0.0
+training_data:
+  balance: true
+  count_per_holo: 10
+  deweight: 0.001
+  file_path: /glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc
+  lookahead: 5 # 3
+  n_bins: 100 # 165
+  pad: false
+  random_tile: false
+  shuffle: true
+  sig_x: 0
+  sig_y: 0
+  sig_z: 0.25 # 695.2887548018718
+  step_size: 128
+  tile_size: 512
+transforms:
+  inference:
+    Normalize:
+      mode: '255'
+  training:
+    Normalize:
+      mode: '255'
+  validation:
+    Normalize:
+      mode: '255'
+validation_data:
+  balance: true
+  count_per_holo: 10
+  deweight: 0.001
+  file_path: /glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc
+  lookahead: 5 # 3
+  n_bins: 100 # 165
+  pad: false
+  random_tile: false
+  shuffle: false
+  sig_x: 0
+  sig_y: 0
+  sig_z: 0.25 # 695.2887548018718
+  step_size: 128
+  tile_size: 512
