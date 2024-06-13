@@ -212,8 +212,11 @@ class LoadHolograms(Dataset):
         num_particles = 0
 
         # find particles that are contained between the first and last planes
-        cond = np.where((z_part >= self.propagator.z_centers[z_idx-self.z_bck_idx]) &
-                        (z_part <= self.propagator.z_centers[z_idx+self.z_fwd_idx]))
+        plane_idx_buffer = 1
+        cond = np.where((z_part >= self.propagator.z_centers[np.maximum(z_idx-self.z_bck_idx-plane_idx_buffer,0)]) & \
+                        (z_part <= self.propagator.z_centers[np.minimum(z_idx+self.z_fwd_idx+plane_idx_buffer,len(self.propagator.z_centers)-1)]))
+        # cond = np.where((z_part >= self.propagator.z_centers[z_idx-self.z_bck_idx]) & \
+        #                 (z_part <= self.propagator.z_centers[z_idx+self.z_fwd_idx]))
 
         # if z_idx in z_indices:
         # cond = np.where(z_idx == z_indices)
@@ -230,7 +233,9 @@ class LoadHolograms(Dataset):
                 x_diff = (self.propagator.x_arr[:, None] * 1e6 - x_part[part_idx])
                 d_squared = (d_part[part_idx] / 2)**2
                 part_pxl_idx = np.where((y_diff**2 + x_diff**2) < d_squared)
-                unet_mask[part_pxl_idx] = 1.0
+                # only include in the particle mask if the particle is actually in the sample volume
+                if (z_part[part_idx] >= self.propagator.z_centers[z_idx-self.z_bck_idx]) & (z_part[part_idx] <= self.propagator.z_centers[z_idx+self.z_fwd_idx]):
+                    unet_mask[part_pxl_idx] = 1.0
                 # unet_mask += ((y_diff**2 + x_diff**2) < d_squared).astype(float)
                 depth_mask[part_pxl_idx] = z_diff
                 weight_pxl_idx = np.where((y_diff**2 + x_diff**2) < 4*d_squared)
@@ -542,9 +547,11 @@ class UpsamplingReader(Dataset):
 
         num_particles = 0
 
-        # find particles that are contained between the first and last planes
-        cond = np.where((z_part >= self.propagator.z_centers[z_idx-self.z_bck_idx]) &
-                        (z_part <= self.propagator.z_centers[z_idx+self.z_fwd_idx]))
+        # find particles that are contained between the first and last planes within a buffer
+        # this allows us to avoid a hard cutoff when particles are near the edges of the planes
+        plane_idx_buffer = 1
+        cond = np.where((z_part >= self.propagator.z_centers[np.maximum(z_idx-self.z_bck_idx-plane_idx_buffer,0)]) & \
+                        (z_part <= self.propagator.z_centers[np.minimum(z_idx+self.z_fwd_idx+plane_idx_buffer,len(self.propagator.z_centers)-1)]))
 
         # if z_idx in z_indices:
         # cond = np.where(z_idx == z_indices)
@@ -561,8 +568,11 @@ class UpsamplingReader(Dataset):
                 x_diff = (self.propagator.x_arr[:, None] * 1e6 - x_part[part_idx])
                 d_squared = (d_part[part_idx] / 2)**2
                 part_pxl_idx = np.where((y_diff**2 + x_diff**2) < d_squared)
-                unet_mask[part_pxl_idx] = 1.0
+                # only include in the particle mask if the particle is actually in the sample volume
+                if (z_part[part_idx] >= self.propagator.z_centers[z_idx-self.z_bck_idx]) & (z_part[part_idx] <= self.propagator.z_centers[z_idx+self.z_fwd_idx]):
+                    unet_mask[part_pxl_idx] = 1.0
                 # unet_mask += ((y_diff**2 + x_diff**2) < d_squared).astype(float)
+                # assign the depth mask even if the particle is not in the volume
                 depth_mask[part_pxl_idx] = z_diff
                 weight_pxl_idx = np.where((y_diff**2 + x_diff**2) < 4*d_squared)
                 weight_mask[weight_pxl_idx] = 1.0
