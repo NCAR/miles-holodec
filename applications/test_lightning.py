@@ -33,7 +33,7 @@ class PlanarLightningModel(L.LightningModule):
         inputs, target = batch
         pred_mask = self.model(inputs)
         loss = self.train_criterion(pred_mask, target.float())
-        self.log('train_loss_step', loss, on_step=True, on_epoch=False, prog_bar=True, logger=False)
+        self.log('train_loss_step', loss, on_step=True, on_epoch=False, prog_bar=False, logger=True)
         self.log('train_loss_epoch', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
     

@@ -11,19 +11,21 @@ trainer:
   limit_predict_batches: null
   check_val_every_n_epoch: 1
   logger:
-    class_path: lightning.pytorch.loggers.CSVLogger
+    class_path: lightning.pytorch.loggers.TensorBoardLogger
     init_args:
       save_dir: '/glade/u/home/jboothe/miles-holodec/results/'
       name: 'old_model'
   callbacks:
   - class_path: lightning.pytorch.callbacks.RichProgressBar
+    init_args:
+      leave: True
   - class_path: lightning.pytorch.callbacks.LearningRateMonitor
     init_args:
       logging_interval: 'epoch'
   - class_path: lightning.pytorch.callbacks.EarlyStopping
     init_args:
       monitor: 'val_loss'
-      patience: 3
+      patience: 4
       min_delta: 0.001
       mode: 'min'
 
@@ -52,11 +54,11 @@ lr_scheduler:
     monitor: 'val_loss'
     mode: "min"
     factor: 0.1
-    patience: 5
-    cooldown: 2
-    min_lr: 1.0e-06
-    verbose: true
-    threshold: 1.0e-04
+    patience: 1
+    cooldown: 0
+    min_lr: 1.0e-07
+    verbose: True
+    threshold: 1.0e-03
 
 data:
   train_dataset: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/train_512_128_6_6_100000_None.nc"
