@@ -97,8 +97,12 @@ class Trainer:
                     y_depth_mask = y_depth_mask.to(y_pred.device, y_pred.dtype)
                     y_weight_mask = y_weight_mask.to(y_pred.device, y_pred.dtype)
 
+                    # depth_weight = torch.sum(y_pred_mask*y_part_mask,dim=(2,3))/torch.sum(y_part_mask,dim=(2,3))
+                    # depth_alpha = 0.5
+
                     mask_loss = criterion[0](y_part_mask, y_pred_mask)#, y_weight_mask)
-                    depth_loss = criterion[1](y_depth_mask*y_part_mask, y_pred_depth*y_part_mask)
+                    # depth_loss = (1-depth_alpha*depth_weight)*criterion[1](y_depth_mask*y_part_mask, y_pred_depth*y_part_mask) + depth_alpha*depth_weight*criterion[1](y_depth_mask*y_pred_mask, y_pred_depth*y_pred_mask)
+                    depth_loss = criterion[1](y_depth_mask, y_pred_depth, y_part_mask, y_pred_mask)
 
                     # Mask metrics
                     for name, metric in metrics[0].items():
@@ -200,8 +204,12 @@ class Trainer:
                 y_depth_mask = y_depth_mask.to(y_pred.device, y_pred.dtype)
                 y_weight_mask = y_weight_mask.to(y_pred.device, y_pred.dtype)
 
+                # depth_weight = torch.sum(y_pred[:,0]*y_part_mask,dim=(2,3))/torch.sum(y_part_mask,dim=(2,3))
+                # depth_alpha = 0.5
+
                 mask_loss = criterion[0](y_part_mask, y_pred[:, 0])
-                depth_loss = criterion[1](y_depth_mask*y_part_mask, y_pred[:, 1]*y_part_mask)
+                # depth_loss = (1-depth_alpha*depth_weight)*criterion[1](y_depth_mask*y_part_mask, y_pred[:, 1]*y_part_mask) + depth_alpha*depth_weight*criterion[1](y_depth_mask*y_pred[:, 0], y_pred[:, 1]*y_pred[:, 0])
+                depth_loss = criterion[1](y_depth_mask, y_pred[:,1], y_part_mask, y_pred[:,0])
 
                 # Mask metrics
                 for name, metric in metrics[0].items():
