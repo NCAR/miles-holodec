@@ -1,0 +1,122 @@
+# lightning.pytorch==2.2.5
+
+seed_everything: 1000
+trainer:
+  #accelerator: 'gpu'
+  #devices: 4
+  #num_nodes: 2
+  #strategy: 'ddp'
+  #fast_dev_run: true
+  max_epochs: 50
+  min_epochs: 5
+  limit_train_batches: 500
+  limit_val_batches: 100
+  limit_test_batches: null
+  limit_predict_batches: null
+  check_val_every_n_epoch: 1
+  logger:
+    class_path: lightning.pytorch.loggers.TensorBoardLogger
+    init_args:
+      save_dir: '/glade/u/home/jboothe/miles-holodec/results/'
+      name: 'new_model'
+      default_hp_metric: False
+  callbacks:
+  - class_path: lightning.pytorch.callbacks.RichProgressBar
+    init_args:
+      leave: True
+  - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+    init_args:
+      logging_interval: 'epoch'
+  - class_path: lightning.pytorch.callbacks.EarlyStopping
+    init_args:
+      monitor: 'val_loss'
+      patience: 4
+      min_delta: 0.001
+      mode: 'min'
+
+
+model:
+  name: "fpn"
+  encoder_name: "resnet50"
+  encoder_weights: "imagenet"
+  classes: 2
+  activation: "sigmoid"
+  training_loss_mask:
+    class_path: holodec.losses.TverskyLoss # Can name class directly if holodec.losses is imported
+  training_loss_depth:
+    class_path: IntersectedMAE
+  training_loss_depth_mult: 0.03 # 300.0
+  validation_loss_mask:
+    class_path: holodec.losses.DiceLoss
+  validation_loss_depth:
+    class_path: IntersectedMAE
+  validation_loss_depth_mult: 0.03 # 300.0
+
+optimizer:
+  class_path: AdamW # Any torch.optim optimizer or custom imported one
+  init_args:
+    lr: 0.0012922035172040743
+    weight_decay: 0.0
+    betas:
+    - 0.9
+    - 0.999
+
+lr_scheduler:
+  class_path: ReduceLROnPlateau # accepts any subclass of torch.nn.module
+  init_args:
+    monitor: 'val_loss'
+    mode: "min"
+    factor: 0.1
+    patience: 1
+    cooldown: 0
+    min_lr: 1.0e-07
+    verbose: True
+    threshold: 1.0e-03
+
+data:
+  #num_workers: 4
+  lookahead: 5
+  training_data:
+    file_path: /glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc
+    balance: true
+    count_per_holo: 10
+    deweight: 0.001
+    n_bins: 100 # 165
+    pad: false
+    random_tile: false
+    shuffle: true
+    sig_x: 0
+    sig_y: 0
+    sig_z: 0.25 # 695.2887548018718
+    step_size: 128
+    tile_size: 512
+  validation_data:
+    balance: true
+    count_per_holo: 10
+    deweight: 0.001
+    file_path: /glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc
+    n_bins: 100 # 165
+    pad: false
+    random_tile: false
+    shuffle: false
+    sig_x: 0
+    sig_y: 0
+    sig_z: 0.25 # 695.2887548018718
+    step_size: 128
+    tile_size: 512
+  train_batch_size: 4
+  valid_batch_size: 4
+  transforms:
+    inference:
+      Normalize:
+        mode: '255'
+    training:
+      Normalize:
+        mode: '255'
+    validation:
+      Normalize:
+        mode: '255'
+
+##################################################
+
+##################################################
