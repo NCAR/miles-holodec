@@ -1,0 +1,103 @@
+# lightning.pytorch==2.2.5
+
+seed_everything: 1000
+trainer:
+  #accelerator: 'gpu'
+  #devices: 4
+  #num_nodes: 2
+  strategy: 'ddp'
+  #fast_dev_run: true
+  max_epochs: 30
+  min_epochs: 5
+  limit_train_batches: 500
+  limit_val_batches: 100
+  limit_test_batches: null
+  limit_predict_batches: 100
+  check_val_every_n_epoch: 1
+  logger:
+    class_path: lightning.pytorch.loggers.TensorBoardLogger
+    init_args:
+      save_dir: '/glade/u/home/jboothe/miles-holodec/results/'
+      name: 'old_model'
+  callbacks:
+  - class_path: HolodecWriter
+    init_args:
+      output_dir: '/glade/derecho/scratch/jboothe/miles-holodec/results/predictions/full_size/'
+      write_interval: 'epoch'
+  - class_path: lightning.pytorch.callbacks.RichProgressBar
+    init_args:
+      leave: True
+  - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+    init_args:
+      logging_interval: 'epoch'
+  - class_path: lightning.pytorch.callbacks.EarlyStopping
+    init_args:
+      monitor: 'val_loss'
+      patience: 4
+      min_delta: 0.001
+      mode: 'min'
+
+model:
+  name: "linknet"
+  encoder_name: "xception"
+  encoder_weights: "imagenet"
+  in_channels: 1
+  classes: 1
+  activation: "sigmoid"
+  training_loss:
+    class_path: FocalTverskyLoss # Can name class directly if holodec.losses is imported
+  validation_loss:
+    class_path: holodec.losses.DiceLoss # Can do full path to clear ambiguity
+
+optimizer:
+  class_path: AdamW # Any torch.optim optimizer or custom imported one
+  init_args:
+    lr: 0.00024575732726722595
+    weight_decay: 0.0
+
+lr_scheduler:
+  class_path: ReduceLROnPlateau # accepts any subclass of torch.nn.module
+  init_args:
+    monitor: 'val_loss'
+    mode: "min"
+    factor: 0.1
+    patience: 1
+    cooldown: 0
+    min_lr: 1.0e-07
+    verbose: True
+    threshold: 1.0e-03
+
+data:
+  train_dataset: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/train_512_128_6_6_100000_None.nc"
+  validation_dataset: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/valid_512_128_6_6_100000_None.nc"
+  predict_dataset: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_test.nc"
+  train_batch_size: 16
+  valid_batch_size: 16
+  predict_batch_size: 16
+  transforms:
+    training:
+        ToTensor: True
+        RandomVerticalFlip:
+            rate: 0.5
+        RandomHorizontalFlip: 
+            rate: 0.5
+        Normalize:
+            mode: 'norm'
+        GaussianBlur:
+            rate: 1.0
+            kernel_size: 1
+            sigma: 2.1252219359742823
+        GaussianNoise:
+            rate: 1.0
+            noise: 0.3258530643453389
+        AdjustBrightness:
+            rate: 1.0
+            brightness_factor: 1.269735791766263
+    validation:
+        Normalize:
+            mode: 'norm'
+        ToTensor: True
+    predict:
+        Normalize:
+            mode: 'norm'
+        ToTensor: True
