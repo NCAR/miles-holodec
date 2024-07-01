@@ -138,8 +138,7 @@ class HolodecDataModule(L.LightningDataModule):
     def setup(self, stage: str = None):
         # Called on every GPU
         if stage == 'fit' or stage is None:
-            device = get_gpu_string(self.trainer.local_rank)
-            print(device)
+            device = torch.device('cpu')
             self.train_config["device"] = device
             self.valid_config["device"] = device
             
@@ -149,13 +148,17 @@ class HolodecDataModule(L.LightningDataModule):
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
-            batch_size=self.train_batch_size
+            batch_size=self.train_batch_size,
+            num_workers=8,
+            persistent_workers=True
         )
     
     def val_dataloader(self):
         return DataLoader(
             self.valid_dataset,
-            batch_size=self.valid_batch_size
+            batch_size=self.valid_batch_size,
+            num_workers=8,
+            persistent_workers=True
         )
     
     def test_dataloader(self):

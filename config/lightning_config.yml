@@ -2,13 +2,17 @@
 
 seed_everything: 1000
 trainer:
+  #accelerator: 'gpu'
+  #devices: 4
+  #num_nodes: 2
+  strategy: 'ddp'
   #fast_dev_run: true
   max_epochs: 30
   min_epochs: 5
   limit_train_batches: 500
   limit_val_batches: 100
   limit_test_batches: null
-  limit_predict_batches: null
+  limit_predict_batches: 100
   check_val_every_n_epoch: 1
   logger:
     class_path: lightning.pytorch.loggers.TensorBoardLogger
@@ -16,6 +20,10 @@ trainer:
       save_dir: '/glade/u/home/jboothe/miles-holodec/results/'
       name: 'old_model'
   callbacks:
+  - class_path: HolodecWriter
+    init_args:
+      output_dir: '/glade/derecho/scratch/jboothe/miles-holodec/results/predictions/full_size/'
+      write_interval: 'epoch'
   - class_path: lightning.pytorch.callbacks.RichProgressBar
     init_args:
       leave: True
@@ -28,7 +36,6 @@ trainer:
       patience: 4
       min_delta: 0.001
       mode: 'min'
-
 
 model:
   name: "linknet"
@@ -63,8 +70,10 @@ lr_scheduler:
 data:
   train_dataset: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/train_512_128_6_6_100000_None.nc"
   validation_dataset: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/valid_512_128_6_6_100000_None.nc"
+  predict_dataset: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_test.nc"
   train_batch_size: 16
   valid_batch_size: 16
+  predict_batch_size: 16
   transforms:
     training:
         ToTensor: True
@@ -88,6 +97,7 @@ data:
         Normalize:
             mode: 'norm'
         ToTensor: True
-    inference:
+    predict:
         Normalize:
             mode: 'norm'
+        ToTensor: True

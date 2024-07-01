@@ -2,12 +2,12 @@
 
 seed_everything: 1000
 trainer:
-  #accelerator: 'gpu'
-  #devices: 4
+  accelerator: 'gpu'
+  devices: 4
   #num_nodes: 2
-  #strategy: 'ddp'
+  strategy: 'ddp'
   #fast_dev_run: true
-  max_epochs: 50
+  max_epochs: 25
   min_epochs: 5
   limit_train_batches: 500
   limit_val_batches: 100
@@ -55,7 +55,7 @@ model:
 optimizer:
   class_path: AdamW # Any torch.optim optimizer or custom imported one
   init_args:
-    lr: 0.0012922035172040743
+    lr: 0.00012922035172040743
     weight_decay: 0.0
     betas:
     - 0.9
