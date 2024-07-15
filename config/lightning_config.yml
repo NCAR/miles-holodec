@@ -12,7 +12,7 @@ trainer:
   limit_train_batches: 500
   limit_val_batches: 100
   limit_test_batches: null
-  limit_predict_batches: 100
+  # limit_predict_batches: 100
   check_val_every_n_epoch: 1
   logger:
     class_path: lightning.pytorch.loggers.TensorBoardLogger
@@ -23,7 +23,7 @@ trainer:
   - class_path: HolodecWriter
     init_args:
       output_dir: '/glade/derecho/scratch/jboothe/miles-holodec/results/predictions/full_size/'
-      write_interval: 'epoch'
+      write_interval: 'batch'
   - class_path: lightning.pytorch.callbacks.RichProgressBar
     init_args:
       leave: True
@@ -73,7 +73,7 @@ data:
   predict_dataset: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_test.nc"
   train_batch_size: 16
   valid_batch_size: 16
-  predict_batch_size: 16
+  predict_batch_size: 1
   transforms:
     training:
         ToTensor: True

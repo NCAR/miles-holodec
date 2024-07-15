@@ -1,6 +1,9 @@
 import lightning as L
 import torch
 import os
+import scipy.ndimage
+import numpy as np
+
 from torch.utils.data import DataLoader
 from lightning.pytorch.cli import LightningArgumentParser, LightningCLI
 from lightning.pytorch.cli import OptimizerCallable
@@ -10,6 +13,7 @@ from lightning.pytorch.callbacks import BasePredictionWriter
 import holodec.losses
 from holodec.unet import PlanerSegmentationModel as SegmentationModel
 from holodec.datasets import UpsamplingReader, XarrayReader
+from holodec.planer_datasets import LoadHolograms
 from holodec.planer_transforms import LoadTransformations
 
 
@@ -22,17 +26,20 @@ class PlanarLightningModel(L.LightningModule):
                  encoder_weights: str = None,
                  in_channels: int = 0,
                  classes: int = 0,
-                 activation: str = None):
+                 activation: str = None,
+                 prediction_threshold: float = 0.5):
         
         super().__init__()
-        self.save_hyperparameters(ignore=('training_loss', 'validation_loss'))
+        self.save_hyperparameters(ignore=('training_loss', 'validation_loss', 'prediction_threshold'))
         conf = self.hparams
         self.model = SegmentationModel({'model': conf})
         self.train_criterion = training_loss
         self.val_criterion = validation_loss
+        self.prediction_threshold = prediction_threshold
+        
     
     def training_step(self, batch, batch_idx):
-        inputs, target = batch
+        inputs, target = batch        
         pred_mask = self.model(inputs)
         loss = self.train_criterion(pred_mask, target.float())
         self.log('train_loss_step', loss, on_step=True, on_epoch=False, prog_bar=False, logger=True)
@@ -47,8 +54,39 @@ class PlanarLightningModel(L.LightningModule):
         return loss
     
     def predict_step(self, batch, batch_idx):
-        inputs, target = batch
-        return self.model(inputs)
+        inputs, target, h_idx, z_idx = batch
+        pred_prob = self.model(inputs)
+        # apply thresh
+        pred_mask = pred_prob > self.prediction_threshold
+        # scipy cluster
+        pred_coordinates = []
+        if pred_mask.sum() > 0:
+            arr, n = scipy.ndimage.label(pred_mask.squeeze().cpu().numpy())
+            _centroid = scipy.ndimage.find_objects(arr)
+            # compute (x,y,d)
+            for particle in _centroid:
+                xind = (particle[0].stop + particle[0].start) // 2
+                yind = (particle[1].stop + particle[1].start) // 2
+                dind = max([
+                    abs(particle[0].stop - particle[0].start), 
+                    abs(particle[1].stop - particle[1].start)
+                ])
+                pred_coordinates.append([h_idx.item(), xind, yind, z_idx.item(), dind])
+        # repeat for target
+        true_coordinates = []
+        if target.sum() > 0:
+            arr, n = scipy.ndimage.label(target.squeeze().cpu().numpy())
+            _centroid = scipy.ndimage.find_objects(arr)
+            for particle in _centroid:
+                xind = (particle[0].stop + particle[0].start) // 2
+                yind = (particle[1].stop + particle[1].start) // 2
+                dind = max([
+                    abs(particle[0].stop - particle[0].start), 
+                    abs(particle[1].stop - particle[1].start)
+                ])
+                true_coordinates.append([h_idx.item(), xind, yind, z_idx.item(), dind])
+                
+        return pred_coordinates, true_coordinates
 
 
 class Transforms:
@@ -66,12 +104,14 @@ class HolodecDataModule(L.LightningDataModule):
                  transforms: Transforms = None,
                  train_batch_size=16,
                  valid_batch_size=16,
-                 predict_batch_size=16):
+                 predict_batch_size=16,
+                 num_workers=8):
         
         super().__init__()
         self.train_datapath = train_dataset
         self.valid_datapath = validation_dataset
         self.predict_datapath = predict_dataset
+        self.num_workers = num_workers
         
         self.train_conf = transforms.training_config
         self.valid_conf = transforms.validation_config
@@ -102,9 +142,10 @@ class HolodecDataModule(L.LightningDataModule):
                 mode="mask"
             )
         if stage == 'predict':
-            self.predict_dataset = XarrayReader(
+            self.predict_dataset = LoadHolograms(
                 self.predict_datapath,
-                self.predict_transforms
+                n_bins=1000,
+                transform=self.predict_transforms
             )
     
     def train_dataloader(self):
@@ -117,7 +158,12 @@ class HolodecDataModule(L.LightningDataModule):
         pass
     
     def predict_dataloader(self):
-        return DataLoader(self.predict_dataset, batch_size=self.predict_batch_size)
+        return DataLoader(
+            self.predict_dataset,
+            batch_size=self.predict_batch_size,
+            num_workers=self.num_workers,
+            persistent_workers=True
+            )
     
     def teardown(self, stage: str):
         pass
@@ -132,7 +178,19 @@ class HolodecWriter(BasePredictionWriter):
     def write_on_batch_end(
         self, trainer, pl_module, prediction, batch_indices, batch, batch_idx, dataloader_idx
     ):
-        torch.save(prediction, os.path.join(self.output_dir, dataloader_idx, f"{batch_idx}.pt"))
+        pred_coords, true_coords = prediction
+        pred_array = np.array(pred_coords)
+        true_array = np.array(true_coords)
+        
+        fname_p = os.path.join(self.output_dir, f"predictions_{trainer.global_rank}.csv")
+        with open(fname_p, "ab") as f:
+            np.savetxt(f, pred_array, delimiter=',')
+            # f.write(b"\n")
+            
+        fname_t = os.path.join(self.output_dir, f"true_{trainer.global_rank}.csv")
+        with open(fname_t, "ab") as f:
+            np.savetxt(f, true_array, delimiter=',')
+            # f.write(b"\n")
         
     def write_on_epoch_end(
         self, trainer, pl_module, predictions, batch_indices
