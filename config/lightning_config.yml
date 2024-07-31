@@ -2,8 +2,8 @@
 
 seed_everything: 1000
 trainer:
-  #accelerator: 'gpu'
-  #devices: 4
+  accelerator: 'gpu'
+  devices: 4
   #num_nodes: 2
   strategy: 'ddp'
   #fast_dev_run: true
@@ -22,7 +22,7 @@ trainer:
   callbacks:
   - class_path: HolodecWriter
     init_args:
-      output_dir: '/glade/derecho/scratch/jboothe/miles-holodec/results/predictions/full_size/'
+      output_dir: '/glade/derecho/scratch/jboothe/miles-holodec/results/predictions/full_size/ddp/'
       write_interval: 'batch'
   - class_path: lightning.pytorch.callbacks.RichProgressBar
     init_args:
