@@ -13,13 +13,23 @@ class LoadTiles(Dataset):
     def __init__(
             self,
             file_path,
-            plane_inc=1,
+            plane_inc=1, # index spacing to use in the loaded data
             shuffle=False,
             device="cpu",
-            transform=None,
+            transform=None,  # currently not implemented
             lookahead=2,
             output_lst=None, # list of dataset variables to use
     ):
+        """
+        example:
+        dataloader = holodec.datasets.LoadTiles(os.path.join(file_path,file_name),
+            plane_inc=2,
+            lookahead=3,
+            device=device,
+            shuffle=False)
+        This creates a dataloader that grabs 3 planes with spacing 2x that in the tiled dataset
+        with no randomization in the tile selection.
+        """
         self.plane_inc = plane_inc # number of z planes to skip in tile stack indexing 
         self.lookahead = lookahead # desired z plane depth
 
@@ -34,7 +44,7 @@ class LoadTiles(Dataset):
         else:
             self.output_lst = output_lst
 
-        # TODO how to figure out which z planes to index based on
+        # find which z planes to index based on
         # nuber of planes (lookahead) and plane spacing (plane_inc)
         self.z_idx = np.sort(np.argsort(np.abs(self.ds['z0_plane'].values[::self.plane_inc]))[:self.lookahead])
         self.z_plane = self.ds['z0_plane'].values[::plane_inc][self.z_idx]
