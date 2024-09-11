@@ -9,6 +9,65 @@ import random
 import math
 
 
+class LoadTiles(Dataset):
+    def __init__(
+            self,
+            file_path,
+            plane_inc=1,
+            shuffle=False,
+            device="cpu",
+            transform=None,
+            lookahead=2,
+            output_lst=None, # list of dataset variables to use
+    ):
+        self.plane_inc = plane_inc # number of z planes to skip in tile stack indexing 
+        self.lookahead = lookahead # desired z plane depth
+
+        self.file_path = file_path
+        self.ds = xr.open_dataset(self.file_path)
+
+        self.shuffle = shuffle
+        self.device = device
+        self.transform = transform
+        if output_lst is None:
+            self.output_lst = ['tiles_ampl','tiles_phase']
+        else:
+            self.output_lst = output_lst
+
+        # TODO how to figure out which z planes to index based on
+        # nuber of planes (lookahead) and plane spacing (plane_inc)
+        self.z_idx = np.sort(np.argsort(np.abs(self.ds['z0_plane'].values[::self.plane_inc]))[:self.lookahead])
+        self.z_plane = self.ds['z0_plane'].values[::plane_inc][self.z_idx]
+        self.plane_dz = self.z_plane[1]-self.z_plane[0]
+        self.z_offset = np.mean(self.plane_dz) # offset to place depth in the center of the z stack
+
+    def __len__(self):
+        return self.ds['tile_id'].values.size
+    
+    def __getitem__(self, idx):
+        if self.shuffle:
+            idx = random.choice(range(self.__len__()))
+        
+        in_chan_lst = []
+        for var in self.output_lst:
+            in_chan_lst.append(self.ds[var].isel(tile_id=idx,z0_plane=self.z_idx).values)
+
+        in_channels = torch.tensor(np.concatenate(in_chan_lst,axis=0),dtype=torch.float64,device=self.device)
+        part_mask = torch.tensor(self.ds['tiles_part_mask'].isel(tile_id=idx).values,dtype=torch.float64,device=self.device)
+        depth_mask = torch.tensor((self.ds['tiles_depth_mask'].isel(tile_id=idx).values-self.z_offset)/self.plane_dz,dtype=torch.float64,device=self.device)
+        weight_mask = torch.tensor(self.ds['tiles_weight_mask'].isel(tile_id=idx).values,dtype=torch.float64,device=self.device)
+
+
+        return in_channels, part_mask, depth_mask, weight_mask
+    
+    # def _apply_output_functions(self, image):
+    #     image = image.to(dtype=torch.complex64)  # as of v2.2.0 abs and angle do not support complex128
+    #     ch_lst = [fnc(image) for fnc in self.output_lst]
+    #     in_channels = torch.cat(ch_lst, dim=1)  # Stack the channels along the z-planes
+    #     return in_channels
+    
+
+
 class LoadHolograms(Dataset):
     def __init__(
         self,
