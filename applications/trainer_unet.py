@@ -25,7 +25,7 @@ from torch.distributed.fsdp.wrap import (
     size_based_auto_wrap_policy,
 )
 from holodec.unet import SegmentationModel
-from holodec.datasets import LoadHolograms, UpsamplingReader
+from holodec.datasets import LoadHolograms, UpsamplingReader, LoadTiles
 from holodec.trainer import Trainer
 from holodec.pbs import launch_script, launch_script_mpi
 from holodec.seed import seed_everything
@@ -148,8 +148,10 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
         setup(rank, world_size, conf["trainer"]["mode"])
         distributed = True
 
-    for update_key in ["n_bins", "lookahead", "sig_z"]:
-        conf["validation_data"][update_key] = conf["training_data"][update_key]
+    # for update_key in ["n_bins", "lookahead", "sig_z"]:
+    #     conf["validation_data"][update_key] = conf["training_data"][update_key] # UpsamplingReader
+    for update_key in ["plane_inc", "lookahead",]:
+        conf["validation_data"][update_key] = conf["training_data"][update_key] # LoadTiles
 
     # infer device id from rank
 
@@ -166,10 +168,12 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     # Complete the dataset configuration with missing parameters
     conf["training_data"]["device"] = device
     conf["training_data"]["transform"] = LoadTransformations(conf["transforms"]["training"])
-    conf["training_data"]["output_lst"] = [torch.abs, torch.angle]
+    # conf["training_data"]["output_lst"] = [torch.abs, torch.angle]  # UpsamplingReader
+    conf["training_data"]["output_lst"] = ['tiles_ampl','tiles_phase']  # LoadTiles
 
     # Create the UpsamplingReader using the updated configuration
-    train_dataset = UpsamplingReader(**conf["training_data"])
+    # train_dataset = UpsamplingReader(**conf["training_data"])
+    train_dataset = LoadTiles(**conf["training_data"])
 
     # train_dataset = UpsamplingReader(
     #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc",
@@ -233,10 +237,12 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
 
     conf["validation_data"]["device"] = device
     conf["validation_data"]["transform"] = LoadTransformations(conf["transforms"]["validation"])
-    conf["validation_data"]["output_lst"] = [torch.abs, torch.angle]
+    conf["validation_data"]["output_lst"] = [torch.abs, torch.angle]  # UpsamplingReader
+    conf["validation_data"]["output_lst"] = ['tiles_ampl','tiles_phase']  # LoadTiles
 
     # Create the UpsamplingReader using the updated configuration
-    valid_dataset = UpsamplingReader(**conf["validation_data"])
+    # valid_dataset = UpsamplingReader(**conf["validation_data"])
+    valid_dataset = LoadTiles(**conf["validation_data"])
 
     # setup the distributed sampler
     if distributed:

@@ -49,7 +49,7 @@ class LoadTiles(Dataset):
         self.z_idx = np.sort(np.argsort(np.abs(self.ds['z0_plane'].values[::self.plane_inc]))[:self.lookahead])
         self.z_plane = self.ds['z0_plane'].values[::plane_inc][self.z_idx]
         self.plane_dz = self.z_plane[1]-self.z_plane[0]
-        self.z_offset = np.mean(self.plane_dz) # offset to place depth in the center of the z stack
+        self.z_offset = np.mean(self.z_plane) # offset to place depth in the center of the z stack
 
     def __len__(self):
         return self.ds['tile_id'].values.size
@@ -67,6 +67,22 @@ class LoadTiles(Dataset):
         depth_mask = torch.tensor((self.ds['tiles_depth_mask'].isel(tile_id=idx).values-self.z_offset)/self.plane_dz,dtype=torch.float64,device=self.device)
         weight_mask = torch.tensor(self.ds['tiles_weight_mask'].isel(tile_id=idx).values,dtype=torch.float64,device=self.device)
 
+        if self.transform is not None:
+
+            stacked_masks = torch.stack([part_mask, depth_mask, weight_mask], dim=0)
+
+            im = {
+                "image": in_channels,
+                "mask": stacked_masks
+            }
+
+            for image_transform in self.transform:
+                im = image_transform(im)
+
+            in_channels = im['image'].float()
+            part_mask = im['mask'][0, :, :]
+            depth_mask = im['mask'][1, :, :]
+            weight_mask = im['mask'][2, :, :]
 
         return in_channels, part_mask, depth_mask, weight_mask
     
