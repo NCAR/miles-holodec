@@ -21,7 +21,7 @@ pbs:
   project: NEOL0007
   queue: preempt
   walltime: '12:00:00'
-save_loc: /glade/derecho/scratch/mhayman/miles-holodec/results_cashed_3 # /glade/u/home/schreck/work/schreck/repos/miles-holodec/results/echo
+save_loc: /glade/derecho/scratch/mhayman/miles-holodec/results_cashed_4 # /glade/u/home/schreck/work/schreck/repos/miles-holodec/results/echo
 seed: 1000
 trainer:
   amp: false
@@ -50,8 +50,8 @@ trainer:
   weight_decay: 0.0
 training_data:
   file_path: /glade/derecho/scratch/mhayman/miles-holodec/simulations/synthetic_holograms_4872x3248_runon20240903T134444_training_tiled_20240912T053137.nc
-  lookahead: 9 # 3
-  plane_inc: 1
+  lookahead: 4 # 3
+  plane_inc: 4
   shuffle: true
 transforms:
   inference:
@@ -64,7 +64,7 @@ transforms:
     Normalize:
       mode: '255'
 validation_data:
-  file_path: /glade/derecho/scratch/mhayman/miles-holodec/simulations/synthetic_holograms_4872x3248_runon20240903T134444_training_tiled_20240911T141807.nc
+  file_path: /glade/derecho/scratch/mhayman/miles-holodec/simulations/synthetic_holograms_4872x3248_runon20240912T052557_validation_tiled_20240912T095229.nc
   lookahead: 5 # 3
   plane_inc: 3
   shuffle: true
