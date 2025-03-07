@@ -28,4 +28,5 @@ conda activate holodec
 # source ~/.bash_profile
 
 ### Run the executable
-python applications/trainer_unet.py -c config/best.yml
+python applications/trainer_unet.py -c config/hyper_best_20241126.yml
+# python applications/trainer_unet.py -c config/best.yml
