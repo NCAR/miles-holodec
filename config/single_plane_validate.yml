@@ -1,0 +1,77 @@
+# Single-plane validation run
+# Hyperparameters from Matt Hayman's hyper_best_20241126.yml (vgg11/fpn, lr optimized)
+# Using trainer_unet_planer.py + LoadHolograms (live wave prop, single z-plane)
+# Purpose: validate pipeline on Casper before multiplane run on Derecho
+
+seed: 1000
+save_loc: "/glade/derecho/scratch/schreck/holodec/single_plane_validate"
+
+data:
+    n_bins: 1000
+    data_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc"
+    valid_data_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc"
+    tile_size: 512
+    step_size: 128
+    lookahead: 0   # single-plane
+    device: "cpu"  # wave prop on cpu, model on gpu
+
+transforms:
+    training:
+        Normalize:
+            mode: '255'
+    validation:
+        Normalize:
+            mode: '255'
+    inference:
+        Normalize:
+            mode: '255'
+
+model:
+    name: "fpn"
+    encoder_name: "vgg11"
+    encoder_weights: "imagenet"
+    in_channels: 1    # single-plane amplitude only
+    classes: 1
+    activation: "sigmoid"
+
+loss:
+    training_loss_mask: "focal-tyversky"
+    validation_loss_mask: "dice"
+
+trainer:
+    mode: "none"   # single GPU for validation; bump to ddp for production
+    train_batch_size: 4
+    valid_batch_size: 4
+    batches_per_epoch: 500
+    valid_batches_per_epoch: 100
+    start_epoch: 0
+    epochs: 50
+    amp: false
+    grad_accum_every: 1
+    thread_workers: 4
+    valid_thread_workers: 4
+    stopping_patience: 4
+    use_scheduler: true
+    scheduler:
+        scheduler_type: plateau
+        mode: min
+        factor: 0.1
+        patience: 5
+        cooldown: 2
+        min_lr: 1.0e-07
+        verbose: true
+        threshold: 0.00029232814653178314
+    learning_rate: 0.00045226229648926385
+    weight_decay: 0.0
+
+pbs:
+    conda: "holodec"
+    job_name: "holo_val"
+    nodes: 1
+    ncpus: 4
+    ngpus: 1
+    mem: "128GB"
+    walltime: "06:00:00"
+    gpu_type: "a100"
+    project: "NAML0001"
+    queue: "casper"
