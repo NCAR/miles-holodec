@@ -46,7 +46,7 @@ trainer:
     valid_batches_per_epoch: 100
     start_epoch: 0
     epochs: 50
-    amp: false
+    amp: true
     grad_accum_every: 1
     thread_workers: 0
     valid_thread_workers: 0

@@ -105,6 +105,9 @@ def run_inference(
     z_stride=None,
     max_holograms=None,
     h_start=0,
+    cluster=False,
+    xy_radius=50.0,
+    z_radius=200.0,
 ):
     seed_everything(conf.get("seed", 1000))
     os.makedirs(output_dir, exist_ok=True)
@@ -260,11 +263,48 @@ def run_inference(
 
         logger.info(f"  h={h_idx}: {n_detections_this_holo} raw detections")
 
-    out_path = os.path.join(output_dir, "detections.csv")
     df = pd.DataFrame(all_detections)
+
+    if cluster:
+        n_raw = len(df)
+        df = _nms_3d(df, xy_radius=xy_radius, z_radius=z_radius)
+        logger.info(f"NMS: {n_raw} raw → {len(df)} after clustering "
+                    f"(xy_r={xy_radius}μm, z_r={z_radius}μm)")
+
+    out_path = os.path.join(output_dir, "detections.csv")
     df.to_csv(out_path, index=False)
     logger.info(f"Saved {len(df)} total detections → {out_path}")
     return df
+
+
+def _nms_3d(df: pd.DataFrame, xy_radius: float = 50.0, z_radius: float = 200.0) -> pd.DataFrame:
+    """
+    3D non-maximum suppression in (x_um, y_um, z_um) space.
+
+    Sort detections by mask_score descending. For each kept detection,
+    suppress all subsequent detections within an ellipsoid of semi-axes
+    (xy_radius, xy_radius, z_radius) in micrometers.
+
+    Typical values:
+      xy_radius = 50 μm  (~17 pixels at 2.96 μm/pix)
+      z_radius  = 200 μm (~1.4 z-bins at 144 μm/bin)
+    """
+    if len(df) == 0:
+        return df
+    df = df.sort_values("mask_score", ascending=False).reset_index(drop=True)
+    keep = np.ones(len(df), dtype=bool)
+    x = df["x_um"].values
+    y = df["y_um"].values
+    z = df["z_um"].values
+    for i in range(len(df) - 1):
+        if not keep[i]:
+            continue
+        dx = (x[i + 1:] - x[i]) / xy_radius
+        dy = (y[i + 1:] - y[i]) / xy_radius
+        dz = (z[i + 1:] - z[i]) / z_radius
+        suppress = dx ** 2 + dy ** 2 + dz ** 2 <= 1.0
+        keep[i + 1:][suppress] = False
+    return df[keep].reset_index(drop=True)
 
 
 if __name__ == "__main__":
@@ -291,6 +331,12 @@ if __name__ == "__main__":
                         help="Max number of holograms to process")
     parser.add_argument("--h-start",       type=int, default=0,
                         help="Starting hologram index (default: 0)")
+    parser.add_argument("--cluster",       action="store_true",
+                        help="Apply 3D NMS to collapse duplicate detections")
+    parser.add_argument("--xy-radius",     type=float, default=50.0,
+                        help="NMS suppression radius in x,y (μm, default: 50)")
+    parser.add_argument("--z-radius",      type=float, default=200.0,
+                        help="NMS suppression radius in z (μm, default: 200)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
@@ -314,4 +360,7 @@ if __name__ == "__main__":
         z_stride=args.z_stride,
         max_holograms=args.max_holograms,
         h_start=args.h_start,
+        cluster=args.cluster,
+        xy_radius=args.xy_radius,
+        z_radius=args.z_radius,
     )
