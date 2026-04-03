@@ -1,0 +1,30 @@
+# Inference config for Matt's best multiplane checkpoint (results/checkpoint.pt)
+# Architecture recovered from checkpoint weights:
+#   FPN + ResNet50, in_channels=10 (amp+phase x 5 planes), classes=2 (mask+depth)
+# Epoch 3, trained on synthetic_holograms_500particle_gamma_4872x3248
+
+seed: 1000
+
+training_data:
+    file_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc"
+    n_bins: 1000
+    lookahead: 5
+    tile_size: 512
+    step_size: 128
+    device: "cuda"
+
+transforms:
+    inference:
+        Normalize:
+            mode: '255'
+
+model:
+    name: "fpn"
+    encoder_name: "resnet50"
+    encoder_weights: "imagenet"
+    in_channels: 10
+    classes: 2
+    activation: null
+
+trainer:
+    mode: "none"
