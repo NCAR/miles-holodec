@@ -13,7 +13,7 @@ data:
     tile_size: 512
     step_size: 128
     lookahead: 0   # single-plane
-    device: "cpu"  # wave prop on cpu, model on gpu
+    device: "cuda"  # wave prop on gpu — much faster, requires num_workers=0
 
 transforms:
     training:
@@ -48,8 +48,8 @@ trainer:
     epochs: 50
     amp: false
     grad_accum_every: 1
-    thread_workers: 4
-    valid_thread_workers: 4
+    thread_workers: 0
+    valid_thread_workers: 0
     stopping_patience: 4
     use_scheduler: true
     scheduler:
