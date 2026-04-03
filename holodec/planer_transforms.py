@@ -235,18 +235,13 @@ class AdjustBrightness(object):
 
     def __call__(self, sample):
         if self.rate >= 1.0:
-            image = sample['image']
-            brightness = random.uniform(0.0, self.brightness)
-            image = torchvision.transforms.functional.adjust_brightness(
-                image, brightness
-            )
-            sample["image"] = image
+            factor = random.uniform(0.0, self.brightness)
         elif random.random() < self.rate:
-            image = sample['image']
-            image = torchvision.transforms.functional.adjust_brightness(
-                image, self.brightness
-            )
-            sample["image"] = image
+            factor = self.brightness
+        else:
+            return sample
+        image = sample['image']
+        sample["image"] = np.clip(image * factor, 0.0, image.max())
         return sample
 
 
@@ -261,22 +256,14 @@ class GaussianBlur(object):
 
     def __call__(self, sample):
         if self.rate >= 1.0:
-            image = sample['image']
             sigma = random.uniform(0.0, self.sigma)
-            image = torchvision.transforms.functional.gaussian_blur(
-                image,
-                kernel_size=self.kernel_size,
-                sigma=sigma
-            )
-            sample["image"] = image
         elif random.random() < self.rate:
-            image = sample['image']
-            image = torchvision.transforms.functional.gaussian_blur(
-                image,
-                kernel_size=self.kernel_size,
-                sigma=self.sigma
-            )
-            sample["image"] = image
+            sigma = self.sigma
+        else:
+            return sample
+        from scipy.ndimage import gaussian_filter
+        image = sample['image']
+        sample["image"] = gaussian_filter(image, sigma=sigma)
         return sample
 
 
