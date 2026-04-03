@@ -1,0 +1,66 @@
+loss:
+  training_loss_depth: intersectedmae
+  training_loss_depth_mult: 0.03
+  training_loss_mask: focal-tyversky
+  validation_loss_depth: intersectedmae
+  validation_loss_depth_mult: 0.03
+  validation_loss_mask: dice
+model:
+  classes: 1
+  encoder_name: vgg11
+  encoder_weights: imagenet
+  in_channels: 1
+  name: fpn
+pbs:
+  conda: holodec
+  job_name: holodec
+  mem: 487GB
+  ncpus: 64
+  ngpus: 4
+  nodes: 1
+  project: NEOL0007
+  queue: preempt
+  walltime: '12:00:00'
+save_loc: /glade/derecho/scratch/mhayman/miles-holodec/results_echo_20241126
+seed: 1000
+trainer:
+  amp: false
+  batches_per_epoch: 500
+  epochs: 50
+  grad_accum_every: 1
+  grad_max_norm: 1.0
+  learning_rate: 0.00045226229648926385
+  mode: none
+  scheduler:
+    min_lr: 1.0e-07
+    scheduler_type: plateau
+    threshold: 0.00029232814653178314
+  start_epoch: 0
+  stopping_patience: 4
+  thread_workers: 4
+  train_batch_size: 4
+  use_scheduler: true
+  valid_batch_size: 4
+  valid_batches_per_epoch: 100
+  valid_thread_workers: 4
+  weight_decay: 0.0
+training_data:
+  file_path: /glade/derecho/scratch/mhayman/miles-holodec/simulations/synthetic_holograms_4872x3248_runon20240903T134444_training_tiled_20240912T053137.nc
+  lookahead: 5
+  plane_inc: 2
+  shuffle: true
+transforms:
+  inference:
+    Normalize:
+      mode: '255'
+  training:
+    Normalize:
+      mode: '255'
+  validation:
+    Normalize:
+      mode: '255'
+validation_data:
+  file_path: /glade/derecho/scratch/mhayman/miles-holodec/simulations/synthetic_holograms_4872x3248_runon20240912T052557_validation_tiled_20240912T095229.nc
+  lookahead: 5
+  plane_inc: 3
+  shuffle: true

@@ -1,0 +1,90 @@
+loss:
+  training_loss_depth: intersectedmae # mae # mse
+  training_loss_mask: focal-tyversky
+  training_loss_depth_mult: 0.03 # 300.0
+  validation_loss_depth: intersectedmae # mae
+  validation_loss_mask: dice
+  validation_loss_depth_mult: 0.03 # 300.0
+model:
+  classes: 1
+  encoder_name: resnet50 # efficientnet-b0, resnet50
+  encoder_weights: imagenet
+  in_channels: 1
+  name: fpn
+pbs:
+  conda: holodec
+  job_name: holodec
+  mem: 487GB
+  ncpus: 64
+  ngpus: 4
+  nodes: 1
+  project: NEOL0007
+  queue: preempt
+  walltime: '12:00:00'
+save_loc: /glade/derecho/scratch/mhayman/miles-holodec/results_weighted_11 # /glade/u/home/schreck/work/schreck/repos/miles-holodec/results/echo
+seed: 1000
+trainer:
+  amp: false
+  batches_per_epoch: 500
+  epochs: 50 # 10
+  grad_accum_every: 1
+  grad_max_norm: 1.0
+  learning_rate: 0.0012922035172040743
+  mode: none
+  scheduler:
+    cycle_mult: 6.0
+    first_cycle_steps: 500
+    gamma: 0.7
+    max_lr: 0.00024575732726722595
+    min_lr: 1.e-7 # 2.4575732726722597e-07
+    scheduler_type: cosine-annealing
+    warmup_steps: 499
+  start_epoch: 0
+  stopping_patience: 4
+  thread_workers: 4
+  train_batch_size: 4
+  use_scheduler: true
+  valid_batch_size: 4
+  valid_batches_per_epoch: 100
+  valid_thread_workers: 4
+  weight_decay: 0.0
+training_data:
+  balance: true
+  count_per_holo: 10
+  deweight: 0.001
+  file_path: /glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc
+  lookahead: 5 # 3
+  n_bins: 100 # 165
+  pad: false
+  random_tile: false
+  shuffle: true
+  sig_x: 0
+  sig_y: 0
+  sig_z: 0.25 # 695.2887548018718
+  step_size: 128
+  tile_size: 512
+transforms:
+  inference:
+    Normalize:
+      mode: '255'
+  training:
+    Normalize:
+      mode: '255'
+  validation:
+    Normalize:
+      mode: '255'
+validation_data:
+  balance: true
+  count_per_holo: 10
+  deweight: 0.001
+  file_path: /glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc
+  lookahead: 5 # 3
+  n_bins: 100 # 165
+  pad: false
+  random_tile: false
+  shuffle: false
+  sig_x: 0
+  sig_y: 0
+  sig_z: 0.25 # 695.2887548018718
+  step_size: 128
+  tile_size: 512

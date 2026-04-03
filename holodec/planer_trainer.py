@@ -85,7 +85,7 @@ class Trainer:
 
             for _ in range(grad_accum_every):
 
-                x, y = next(dl)
+                x, y, *_ = next(dl)  # h_idx, z_idx also returned but unused during training
 
                 with autocast(enabled=amp):
 
@@ -173,7 +173,7 @@ class Trainer:
         )
 
         with torch.no_grad():
-            for k, (x, y) in enumerate(valid_loader):
+            for k, (x, y, *_) in enumerate(valid_loader):  # h_idx, z_idx also returned but unused during validation
 
                 y_pred = self.model(x.to(self.device).float())
 
@@ -348,14 +348,12 @@ class Trainer:
             #################
 
             # Put things into a results dictionary -> dataframe
-            ###
-            ### This needs updated!
-            ###
-            ###
             results_dict["epoch"].append(epoch)
-            for name in ["loss", "mae"]:
-                results_dict[f"train_{name}"].append(np.mean(train_results[f"train_{name}"]))
-                results_dict[f"valid_{name}"].append(np.mean(valid_results[f"valid_{name}"]))
+            results_dict["train_loss"].append(np.mean(train_results["train_loss"]))
+            results_dict["valid_loss"].append(np.mean(valid_results["valid_loss"]))
+            for name, metric in metrics.items():
+                results_dict[f"train_{name}"].append(np.mean(train_results.get(f"train_{name}", [float("nan")])))
+                results_dict[f"valid_{name}"].append(np.mean(valid_results.get(f"valid_{name}", [float("nan")])))
             results_dict["lr"].append(optimizer.param_groups[0]["lr"])
 
             df = pd.DataFrame.from_dict(results_dict).reset_index()
@@ -363,7 +361,7 @@ class Trainer:
             # update the learning rate if epoch-by-epoch updates
 
             if conf['trainer']['use_scheduler'] and conf['trainer']['scheduler']['scheduler_type'] == "plateau":
-                scheduler.step(results_dict["valid_mae"][-1])
+                scheduler.step(results_dict["valid_loss"][-1])
 
 #             # Save the best model so far
 #             if not trial:
@@ -404,7 +402,10 @@ class Trainer:
             ][0]
             offset = epoch - best_epoch
             if offset >= conf['trainer']['stopping_patience']:
-                logging.info(f"Trial {trial.number} is stopping early")
+                if trial:
+                    logging.info(f"Trial {trial.number} is stopping early")
+                else:
+                    logging.info("Stopping early due to no improvement")
                 break
 
         best_epoch = [

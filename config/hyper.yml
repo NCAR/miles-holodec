@@ -1,8 +1,8 @@
 log: True
-save_path: "/glade/u/home/schreck/work/schreck/repos/miles-holodec/results/echo"
+save_path: "/glade/work/schreck/repos/miles-holodec-deprecated/results/echo/"
 
 pbs:
-  jobs: 10
+  jobs: 30
   tasks_per_worker: 1
   gpus_per_node: 1
   bash: [
@@ -56,7 +56,7 @@ optuna:
       type: "int"
       settings:
         name: "lookahead"
-        low: 1
+        low: 2
         high: 5
     training_data:sig_z:
       type: "float"

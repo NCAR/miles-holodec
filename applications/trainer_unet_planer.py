@@ -25,16 +25,13 @@ from torch.distributed.fsdp.wrap import (
     size_based_auto_wrap_policy,
 )
 from holodec.unet import PlanerSegmentationModel as SegmentationModel
-#from holodec.planer_datasets import LoadHolograms, UpsamplingReader
+from holodec.planer_datasets import LoadHolograms
 from holodec.planer_trainer import Trainer
 from holodec.pbs import launch_script, launch_script_mpi
 from holodec.seed import seed_everything
 from holodec.losses import load_loss
-#from holodec.planer_transforms import LoadTransformations
+from holodec.planer_transforms import LoadTransformations
 from holodec.scheduler import load_scheduler
-
-from holodecml.data import PickleReader, UpsamplingReader
-from holodecml.transforms import LoadTransformations
 
 
 import ssl
@@ -171,50 +168,28 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     train_transforms = LoadTransformations(conf["transforms"]["training"])
     valid_transforms = LoadTransformations(conf["transforms"]["validation"])
 
-    # Create the UpsamplingReader using the updated configuration
-
-    tile_size = 512
-    step_size = 128
-    data_path = "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic"
-    total_positive = 6
-    total_negative = 6
-    total_examples = 100000
-    transform_mode = 'None'
-    # Set up training and validation file names. Use the prefix to use style-augmented data sets
-    name_tag = f"{tile_size}_{step_size}_{total_positive}_{total_negative}_{total_examples}_{transform_mode}"
-    fn_train = f"{data_path}/train_{name_tag}.pkl"
-    fn_valid = f"{data_path}/valid_{name_tag}.pkl"
-
-    # train_dataset = XarrayReader(fn_train, train_transforms, mode="mask")
-    # valid_dataset = XarrayReader(fn_valid, valid_transforms, mode="mask")
-
-    train_dataset = PickleReader(
-        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/training_512_128_6_6_100000_None.pkl",
+    # Build LoadHolograms datasets from config
+    data_conf = conf["data"]
+    train_dataset = LoadHolograms(
+        data_conf["data_path"],
+        n_bins=data_conf["n_bins"],
+        shuffle=True,
+        device=data_conf.get("device", "cpu"),
         transform=train_transforms,
-        max_images=int(0.8 * conf["data"]["total_training"]),
-        max_buffer_size=int(0.1 * conf["data"]["total_training"]),
-        color_dim=1,
-        shuffle=True
+        lookahead=data_conf.get("lookahead", 0),
+        tile_size=data_conf["tile_size"],
+        step_size=data_conf["step_size"],
     )
-    valid_dataset = PickleReader(
-        "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/validation_512_128_6_6_100000_None.pkl",
-        transform=train_transforms,
-        max_images=int(0.8 * conf["data"]["total_training"]),
-        max_buffer_size=int(0.1 * conf["data"]["total_training"]),
-        color_dim=1,
-        shuffle=False
+    valid_dataset = LoadHolograms(
+        data_conf.get("valid_data_path", data_conf["data_path"]),
+        n_bins=data_conf["n_bins"],
+        shuffle=False,
+        device=data_conf.get("device", "cpu"),
+        transform=valid_transforms,
+        lookahead=data_conf.get("lookahead", 0),
+        tile_size=data_conf["tile_size"],
+        step_size=data_conf["step_size"],
     )
-
-    # train_dataset = UpsamplingReader(
-    #     conf,
-    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc",
-    #     train_transforms
-    # )
-    # valid_dataset = UpsamplingReader(
-    #     conf,
-    #     "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc",
-    #     valid_transforms
-    # )
 
     # setup the distributed sampler
     if distributed:
