@@ -76,9 +76,8 @@ class LoadHolograms(Dataset):
         num_particles, mask = self.create_mask(h_idx, z_idx)
         mask = torch.flip(mask, [0]) if hflip else mask
         mask = torch.flip(mask, [1]) if vflip else mask
-        image, mask = self.pad_images_and_mask(image, mask)
-        
-        return image, mask, h_idx, z_idx
+        padded_image, padded_mask = self.pad_images_and_mask(image, mask)
+        return padded_image, padded_mask, int(h_idx), int(z_idx)
 
     
     def create_mask(self, h_idx, z_idx):

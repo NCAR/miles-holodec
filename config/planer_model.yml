@@ -4,16 +4,17 @@ save_loc: "/glade/work/schreck/repos/miles-holodec/results/zzz/"
 data:
     n_bins: 1000
     data_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc"
+    valid_data_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc"
     raw_data: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/real_holograms_CSET_RF07_20150719_203600-203700.nc"
     tile_size: 512
     step_size: 128
+    lookahead: 0  # number of additional z-planes to look ahead (0 = single-plane)
     marker_size: 10
     total_positive: 6
     total_negative: 6
     total_training: 100000
     transform_mode: 'None'
     output_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/"
-    use_cached: True
     device: "cpu"
     cores: 0
 
