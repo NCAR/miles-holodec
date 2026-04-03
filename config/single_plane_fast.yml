@@ -1,0 +1,71 @@
+# Single-plane fast validation — uses pre-computed 512x512 tiles from hackathon data
+# No live wave propagation; data loading is IO-bound (~10-50x faster than LoadHolograms)
+# Matt's best hyperparams: vgg11/fpn, lr=4.52e-4, focal-tyversky + dice
+
+seed: 1000
+save_loc: "/glade/derecho/scratch/schreck/holodec/single_plane_fast"
+
+data:
+    tiled_data_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/train_512_128_6_6_100000_None.nc"
+    tiled_valid_data_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/tiled_synthetic/valid_512_128_6_6_100000_None.nc"
+
+transforms:
+    training:
+        Normalize:
+            mode: '255'
+    validation:
+        Normalize:
+            mode: '255'
+    inference:
+        Normalize:
+            mode: '255'
+
+model:
+    name: "fpn"
+    encoder_name: "vgg11"
+    encoder_weights: "imagenet"
+    in_channels: 1
+    classes: 1
+    activation: "sigmoid"
+
+loss:
+    training_loss_mask: "focal-tyversky"
+    validation_loss_mask: "dice"
+
+trainer:
+    mode: "none"
+    train_batch_size: 8
+    valid_batch_size: 8
+    batches_per_epoch: 500
+    valid_batches_per_epoch: 100
+    start_epoch: 0
+    epochs: 50
+    amp: true
+    grad_accum_every: 1
+    thread_workers: 4
+    valid_thread_workers: 4
+    stopping_patience: 4
+    use_scheduler: true
+    scheduler:
+        scheduler_type: plateau
+        mode: min
+        factor: 0.1
+        patience: 5
+        cooldown: 2
+        min_lr: 1.0e-07
+        verbose: true
+        threshold: 0.00029232814653178314
+    learning_rate: 0.00045226229648926385
+    weight_decay: 0.0
+
+pbs:
+    conda: "holodec"
+    job_name: "holo_fast"
+    nodes: 1
+    ncpus: 4
+    ngpus: 1
+    mem: "128GB"
+    walltime: "06:00:00"
+    gpu_type: "a100"
+    project: "NAML0001"
+    queue: "casper"

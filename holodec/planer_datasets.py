@@ -5,7 +5,49 @@ from holodec.propagation import UpsamplingPropagator
 import yaml
 import torch
 import numpy as np
+import xarray as xr
 import random
+
+
+class LoadPrecomputedTiles(Dataset):
+    """Read pre-propagated tiled holograms from the hackathon NC format.
+
+    Each file stores variables 'x' (amplitude, shape [k, H, W]) and
+    'y' (binary particle mask, shape [k, H, W]).  No live wave propagation
+    is performed — loading is IO-bound and much faster than LoadHolograms.
+    """
+
+    def __init__(self, file_path, shuffle=False, transform=None):
+        self.ds = xr.open_dataset(file_path)
+        self.n = int(self.ds.dims['k'])
+        self.shuffle = shuffle
+        self.transform = transform
+
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, idx):
+        if self.shuffle:
+            idx = random.randrange(self.n)
+        x = self.ds['x'].isel(k=idx).values.astype(np.float32)  # (H, W)
+        y = self.ds['y'].isel(k=idx).values.astype(np.float32)  # (H, W)
+
+        # apply transforms (expects dict with 'image' key, shape (1, H, W))
+        im = {
+            'image': np.expand_dims(x, 0),
+            'horizontal_flip': False,
+            'vertical_flip': False,
+        }
+        if self.transform:
+            for t in self.transform:
+                im = t(im)
+        x_t = torch.tensor(im['image'], dtype=torch.float)
+        y_t = torch.tensor(y, dtype=torch.float)
+        if im['horizontal_flip']:
+            y_t = torch.flip(y_t, [0])
+        if im['vertical_flip']:
+            y_t = torch.flip(y_t, [1])
+        return x_t, y_t
 
 
 class LoadHolograms(Dataset):

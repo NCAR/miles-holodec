@@ -36,7 +36,7 @@ from torch.distributed.fsdp.wrap import (
     size_based_auto_wrap_policy,
 )
 from holodec.unet import PlanerSegmentationModel as SegmentationModel
-from holodec.planer_datasets import LoadHolograms
+from holodec.planer_datasets import LoadHolograms, LoadPrecomputedTiles
 from holodec.planer_trainer import Trainer
 from holodec.pbs import launch_script, launch_script_mpi
 from holodec.seed import seed_everything
@@ -179,28 +179,44 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     train_transforms = LoadTransformations(conf["transforms"]["training"])
     valid_transforms = LoadTransformations(conf["transforms"]["validation"])
 
-    # Build LoadHolograms datasets from config
+    # Build datasets from config.
+    # If data.tiled_data_path is set, use pre-computed tiles (fast, no live wave prop).
+    # Otherwise fall back to live-propagation LoadHolograms.
     data_conf = conf["data"]
-    train_dataset = LoadHolograms(
-        data_conf["data_path"],
-        n_bins=data_conf["n_bins"],
-        shuffle=True,
-        device=data_conf.get("device", "cpu"),
-        transform=train_transforms,
-        lookahead=data_conf.get("lookahead", 0),
-        tile_size=data_conf["tile_size"],
-        step_size=data_conf["step_size"],
-    )
-    valid_dataset = LoadHolograms(
-        data_conf.get("valid_data_path", data_conf["data_path"]),
-        n_bins=data_conf["n_bins"],
-        shuffle=False,
-        device=data_conf.get("device", "cpu"),
-        transform=valid_transforms,
-        lookahead=data_conf.get("lookahead", 0),
-        tile_size=data_conf["tile_size"],
-        step_size=data_conf["step_size"],
-    )
+    if "tiled_data_path" in data_conf:
+        logging.info("Using pre-computed tiles (LoadPrecomputedTiles)")
+        train_dataset = LoadPrecomputedTiles(
+            data_conf["tiled_data_path"],
+            shuffle=True,
+            transform=train_transforms,
+        )
+        valid_dataset = LoadPrecomputedTiles(
+            data_conf.get("tiled_valid_data_path", data_conf["tiled_data_path"]),
+            shuffle=False,
+            transform=valid_transforms,
+        )
+    else:
+        logging.info("Using live wave propagation (LoadHolograms)")
+        train_dataset = LoadHolograms(
+            data_conf["data_path"],
+            n_bins=data_conf["n_bins"],
+            shuffle=True,
+            device=data_conf.get("device", "cpu"),
+            transform=train_transforms,
+            lookahead=data_conf.get("lookahead", 0),
+            tile_size=data_conf["tile_size"],
+            step_size=data_conf["step_size"],
+        )
+        valid_dataset = LoadHolograms(
+            data_conf.get("valid_data_path", data_conf["data_path"]),
+            n_bins=data_conf["n_bins"],
+            shuffle=False,
+            device=data_conf.get("device", "cpu"),
+            transform=valid_transforms,
+            lookahead=data_conf.get("lookahead", 0),
+            tile_size=data_conf["tile_size"],
+            step_size=data_conf["step_size"],
+        )
 
     # setup the distributed sampler
     if distributed:
@@ -227,13 +243,16 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
 
     # setup the dataloder for this process
 
+    num_workers = conf.get("trainer", {}).get("thread_workers", 0)
+    valid_num_workers = conf.get("trainer", {}).get("valid_thread_workers", num_workers)
+
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=train_batch_size,
         shuffle=False if distributed else True,  # shuffling handled by a sampler
         sampler=train_sampler,
-        pin_memory=False,
-        num_workers=0,
+        pin_memory=True,
+        num_workers=num_workers,
         drop_last=True
     )
 
@@ -242,8 +261,8 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
         batch_size=valid_batch_size,
         shuffle=False,
         sampler=valid_sampler,
-        pin_memory=False,
-        num_workers=0,
+        pin_memory=True,
+        num_workers=valid_num_workers,
         drop_last=True
     )
 
