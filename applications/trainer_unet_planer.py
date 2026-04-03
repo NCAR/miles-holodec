@@ -1,3 +1,7 @@
+import numpy as np  # must be first — patch np.float_ removed in NumPy 2.0 (wandb/timm compat)
+if not hasattr(np, 'float_'):
+    np.float_ = np.float64
+
 import warnings
 from torch.utils.data.distributed import DistributedSampler
 import torch
