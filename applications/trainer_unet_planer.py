@@ -6,12 +6,6 @@ if not hasattr(np, 'bool_'):     np.bool_     = np.bool_  # still exists but jus
 if not hasattr(np, 'object_'):   np.object_   = object
 if not hasattr(np, 'str_'):      np.str_      = np.str_
 
-# wandb has a broken protobuf in this conda env; stub it out before timm/smp import it.
-# wandb is not used in this script (calls are commented out).
-import sys, types as _types
-if 'wandb' not in sys.modules:
-    sys.modules['wandb'] = _types.ModuleType('wandb')
-
 import warnings
 from torch.utils.data.distributed import DistributedSampler
 import torch
