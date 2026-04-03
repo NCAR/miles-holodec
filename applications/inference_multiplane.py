@@ -86,12 +86,12 @@ def _build_input(field, in_channels):
     elif in_channels == 2:
         # amplitude + phase for the centre plane only
         ampl  = torch.abs(field[0:1]).float()  / 255.0
-        phase = torch.angle(field[0:1]).float() / math.pi
+        phase = torch.atan2(field[0:1].imag, field[0:1].real).float() / math.pi
         return torch.cat([ampl, phase], dim=0).cpu()
     else:
         # multiplane: all amplitudes then all phases
         ampl  = torch.abs(field).float()  / 255.0
-        phase = torch.angle(field).float() / math.pi
+        phase = torch.atan2(field.imag, field.real).float() / math.pi
         return torch.cat([ampl, phase], dim=0).cpu()
 
 
