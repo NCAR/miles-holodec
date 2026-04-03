@@ -47,12 +47,12 @@ class SegmentationModel(torch.nn.Module):
 
         super(SegmentationModel, self).__init__()
 
-        in_channels = int(2 * conf["training_data"]["lookahead"])
+        # in_channels = int(2 * conf["training_data"]["lookahead"])
 
         if conf['model']['name'] == 'unet':
             conf['model']['decoder_attention_type'] = 'scse'
-        conf['model']['in_channels'] = in_channels
-        conf['model']['classes'] = 2 # Mask, Depth
+        # conf['model']['in_channels'] = in_channels
+        # conf['model']['classes'] = 2 # Mask, Depth
         self.activations = torch.nn.ModuleList([torch.nn.Sigmoid(), torch.nn.Identity()])
         self.model = load_model(conf['model'])
 

@@ -40,7 +40,7 @@ class LoadHolograms(Dataset):
         )
         self.transform = transform
         self.indices = [
-            (x, y)
+            (int(x.values), int(y))
             for x in self.propagator.h_ds.hologram_number
             for y in range(self.n_bins - self.lookahead)
         ]
@@ -161,11 +161,11 @@ class LoadHolograms(Dataset):
         pad_width = max(target_width - current_width, 0)
 
         # Pad the image_stack
-        mean_image = 0 #torch.mean(image_stack)
-        padded_image_stack = torch.nn.functional.pad(image_stack, (0, pad_width, 0, pad_height), mode='constant', value=mean_image)
+        image_mean = torch.mean(image_stack)
+        padded_image_stack = torch.nn.functional.pad(image_stack, (0, pad_width, 0, pad_height), value=image_mean)
 
         # Pad the mask
-        padded_mask = torch.nn.functional.pad(mask, (0, pad_width, 0, pad_height), mode='constant', value=0)
+        padded_mask = torch.nn.functional.pad(mask, (0, pad_width, 0, pad_height), value=0)
 
         return padded_image_stack, padded_mask
     
