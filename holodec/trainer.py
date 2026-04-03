@@ -89,7 +89,7 @@ class Trainer:
 
                 with autocast(enabled=amp):
 
-                    y_pred = self.model(x)
+                    y_pred = self.model(x.to(self.device).float())
                     y_pred_mask = y_pred[:, 0]
                     y_pred_depth = y_pred[:, 1]
 
@@ -198,7 +198,7 @@ class Trainer:
         with torch.no_grad():
             for k, (x, y_part_mask, y_depth_mask, y_weight_mask) in enumerate(valid_loader):
 
-                y_pred = self.model(x)
+                y_pred = self.model(x.to(self.device).float())
 
                 y_part_mask = y_part_mask.to(y_pred.device, y_pred.dtype)
                 y_depth_mask = y_depth_mask.to(y_pred.device, y_pred.dtype)
