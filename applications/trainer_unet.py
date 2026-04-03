@@ -1,9 +1,18 @@
+import numpy as np  # must be first — patch aliases removed in NumPy 2.0 (wandb/timm compat)
+if not hasattr(np, 'float_'):    np.float_    = np.float64
+if not hasattr(np, 'complex_'):  np.complex_  = np.complex128
+if not hasattr(np, 'int_'):      np.int_      = np.intp
+if not hasattr(np, 'object_'):   np.object_   = object
+
 import warnings
 from torch.utils.data.distributed import DistributedSampler
 import torch
 import torch.distributed as dist
 import functools
-from echo.src.base_objective import BaseObjective
+try:
+    from echo.src.base_objective import BaseObjective
+except ImportError:
+    BaseObjective = object
 
 from argparse import ArgumentParser
 from pathlib import Path
@@ -26,11 +35,12 @@ from torch.distributed.fsdp.wrap import (
 )
 from holodec.unet import SegmentationModel
 from holodec.datasets import LoadHolograms, UpsamplingReader, LoadTiles
+from holodec.planer_datasets import LoadMultiplaneHolograms
 from holodec.trainer import Trainer
 from holodec.pbs import launch_script, launch_script_mpi
 from holodec.seed import seed_everything
 from holodec.losses import load_loss
-from holodec.transforms import LoadTransformations
+from holodec.planer_transforms import LoadTransformations
 from holodec.scheduler import load_scheduler
 
 import ssl
@@ -148,15 +158,16 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
         setup(rank, world_size, conf["trainer"]["mode"])
         distributed = True
 
-    # for update_key in ["n_bins", "lookahead", "sig_z"]:
-    #     conf["validation_data"][update_key] = conf["training_data"][update_key] # UpsamplingReader
+    use_multiplane = (conf["training_data"].get("type") == "multiplane")
     if 'plane_inc' in conf["training_data"]:
-        update_conf_lst = ["plane_inc", "lookahead",]
+        update_conf_lst = ["plane_inc", "lookahead"]
+    elif use_multiplane:
+        update_conf_lst = ["lookahead", "n_bins", "tile_size", "step_size"]
     else:
         update_conf_lst = ["n_bins", "lookahead", "sig_z"]
-
     for update_key in update_conf_lst:
-        conf["validation_data"][update_key] = conf["training_data"][update_key] # LoadTiles
+        if update_key in conf["training_data"]:
+            conf["validation_data"][update_key] = conf["training_data"][update_key]
 
     # infer device id from rank
 
@@ -173,17 +184,27 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     # Complete the dataset configuration with missing parameters
     conf["training_data"]["device"] = device
     conf["training_data"]["transform"] = LoadTransformations(conf["transforms"]["training"])
-    if 'plane_inc' in conf["training_data"]:
-        conf["training_data"]["output_lst"] = ['tiles_ampl','tiles_phase']  # LoadTiles
-    else:
-        conf["training_data"]["output_lst"] = [torch.abs, torch.angle]  # UpsamplingReader
-    
+    conf["validation_data"]["device"] = device
+    conf["validation_data"]["transform"] = LoadTransformations(conf["transforms"]["validation"])
 
-    # Create the UpsamplingReader using the updated configuration
-    if 'plane_inc' in conf["training_data"]:
+    if use_multiplane:
+        logging.info("Using LoadMultiplaneHolograms for live multi-plane training")
+        _td = {k: v for k, v in conf["training_data"].items()
+               if k not in ("type", "valid_file_path")}
+        train_dataset = LoadMultiplaneHolograms(shuffle=True, **_td)
+        _vd = {k: v for k, v in conf["validation_data"].items()
+               if k not in ("type", "valid_file_path")}
+        valid_dataset = LoadMultiplaneHolograms(shuffle=False, **_vd)
+    elif 'plane_inc' in conf["training_data"]:
+        conf["training_data"]["output_lst"] = ['tiles_ampl', 'tiles_phase']
         train_dataset = LoadTiles(**conf["training_data"])
+        conf["validation_data"]["output_lst"] = ['tiles_ampl', 'tiles_phase']
+        valid_dataset = LoadTiles(**conf["validation_data"])
     else:
+        conf["training_data"]["output_lst"] = [torch.abs, torch.angle]
         train_dataset = UpsamplingReader(**conf["training_data"])
+        conf["validation_data"]["output_lst"] = [torch.abs, torch.angle]
+        valid_dataset = UpsamplingReader(**conf["validation_data"])
     
 
     # train_dataset = UpsamplingReader(
@@ -246,20 +267,7 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
     #     sig_z = 3000,
     # )
 
-    conf["validation_data"]["device"] = device
-    conf["validation_data"]["transform"] = LoadTransformations(conf["transforms"]["validation"])
 
-    if 'plane_inc' in conf["training_data"]:
-        conf["validation_data"]["output_lst"] = ['tiles_ampl','tiles_phase']  # LoadTiles
-    else:
-        conf["validation_data"]["output_lst"] = [torch.abs, torch.angle]  # UpsamplingReader
-    
-
-    # Create the UpsamplingReader using the updated configuration
-    if 'plane_inc' in conf["training_data"]:
-        valid_dataset = LoadTiles(**conf["validation_data"])
-    else:
-        valid_dataset = UpsamplingReader(**conf["validation_data"])
 
     # setup the distributed sampler
     if distributed:
@@ -286,13 +294,16 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
 
     # setup the dataloder for this process
 
+    num_workers = conf.get("trainer", {}).get("thread_workers", 0)
+    valid_num_workers = conf.get("trainer", {}).get("valid_thread_workers", num_workers)
+
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=train_batch_size,
-        shuffle=False if distributed else True,  # shuffling handled by a sampler
+        shuffle=False if distributed else True,
         sampler=train_sampler,
-        pin_memory=False,
-        num_workers=0,
+        pin_memory=True,
+        num_workers=num_workers,
         drop_last=True
     )
 
@@ -301,8 +312,8 @@ def trainer(rank, world_size, conf, trial=False, distributed=False):
         batch_size=valid_batch_size,
         shuffle=False,
         sampler=valid_sampler,
-        pin_memory=False,
-        num_workers=0,
+        pin_memory=True,
+        num_workers=valid_num_workers,
         drop_last=True
     )
 

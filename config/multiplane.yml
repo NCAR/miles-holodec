@@ -1,0 +1,87 @@
+# Multi-plane training — live wave propagation via LoadMultiplaneHolograms
+# Matt's best hyperparams (hyper_best_20241126): vgg11/fpn, lr=4.52e-4
+# in_channels = 2 * lookahead (amplitude + phase per plane)
+# classes = 2 (particle mask + depth)
+
+seed: 1000
+save_loc: "/glade/derecho/scratch/schreck/holodec/multiplane"
+
+training_data:
+    type: "multiplane"
+    file_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_training.nc"
+    n_bins: 1000
+    lookahead: 5
+    tile_size: 512
+    step_size: 128
+    deweight: 1.0e-3
+    device: "cuda"   # GPU wave propagation
+
+validation_data:
+    type: "multiplane"
+    file_path: "/glade/p/cisl/aiml/ai4ess_hackathon/holodec/synthetic_holograms_500particle_gamma_4872x3248_validation.nc"
+
+transforms:
+    training:
+        Normalize:
+            mode: '255'
+    validation:
+        Normalize:
+            mode: '255'
+    inference:
+        Normalize:
+            mode: '255'
+
+model:
+    name: "fpn"
+    encoder_name: "vgg11"
+    encoder_weights: "imagenet"
+    in_channels: 10     # 2 * lookahead
+    classes: 2          # particle mask + depth
+    activation: null    # activations applied manually in SegmentationModel
+
+loss:
+    training_loss_mask: "focal-tyversky"
+    validation_loss_mask: "dice"
+    training_loss_depth: "intersectedmae"
+    training_loss_depth_mult: 0.03
+    validation_loss_depth: "intersectedmae"
+    validation_loss_depth_mult: 0.03
+
+trainer:
+    mode: "none"
+    train_batch_size: 4
+    valid_batch_size: 4
+    batches_per_epoch: 500
+    valid_batches_per_epoch: 100
+    start_epoch: 0
+    epochs: 50
+    amp: false
+    grad_accum_every: 1
+    grad_max_norm: 1.0
+    thread_workers: 0
+    valid_thread_workers: 0
+    stopping_patience: 4
+    use_scheduler: true
+    scheduler:
+        scheduler_type: plateau
+        mode: min
+        factor: 0.1
+        patience: 5
+        cooldown: 2
+        min_lr: 1.0e-07
+        verbose: true
+        threshold: 0.00029232814653178314
+    learning_rate: 0.00045226229648926385
+    weight_decay: 0.0
+
+pbs:
+    conda: "holodec"
+    job_name: "holo_multi"
+    nodes: 1
+    ncpus: 4
+    ngpus: 1
+    mem: "128GB"
+    walltime: "12:00:00"
+    gpu_type: "a100"
+    project: "NAML0001"
+    queue: "casper"
