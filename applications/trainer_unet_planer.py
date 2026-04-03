@@ -3,7 +3,10 @@ from torch.utils.data.distributed import DistributedSampler
 import torch
 import torch.distributed as dist
 import functools
-from echo.src.base_objective import BaseObjective
+try:
+    from echo.src.base_objective import BaseObjective
+except ImportError:
+    BaseObjective = object  # echo/optuna not available; hyperparameter search disabled
 
 from argparse import ArgumentParser
 from pathlib import Path
