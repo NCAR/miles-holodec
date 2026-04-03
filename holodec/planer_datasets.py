@@ -222,8 +222,153 @@ class LoadHolograms(Dataset):
         padded_mask = torch.nn.functional.pad(mask, (0, pad_width, 0, pad_height), value=0)
 
         return padded_image_stack, padded_mask
-    
-    
+
+
+class LoadMultiplaneHolograms(Dataset):
+    """Live-propagation multi-plane dataset.
+
+    Propagates each hologram to `lookahead` z-planes centered on the indexed
+    z-bin, then crops a random tile.  Returns the full mask tuple expected by
+    holodec.trainer.Trainer: (in_channels, part_mask, depth_mask, weight_mask).
+
+    in_channels shape: (lookahead * len(output_fns), tile_size, tile_size)
+    Default output_fns = [torch.abs, torch.angle]  →  2*lookahead channels.
+    """
+
+    def __init__(
+        self,
+        file_path,
+        n_bins=1000,
+        shuffle=False,
+        device="cpu",
+        transform=None,
+        lookahead=5,
+        step_size=128,
+        tile_size=512,
+        deweight=1e-3,
+    ):
+        import math
+        assert lookahead > 1, "lookahead must be >= 2 for multiplane"
+        self.n_bins = n_bins
+        self.device = device
+        self.shuffle = shuffle
+        self.lookahead = lookahead
+        self.z_bck_idx = int(math.floor((lookahead - 1) / 2))
+        self.z_fwd_idx = int(math.ceil((lookahead - 1) / 2)) + 1
+        self.tile_size = tile_size
+        self.step_size = step_size
+        self.deweight = deweight
+        self.transform = transform
+
+        self.propagator = WavePropagator(
+            file_path,
+            n_bins=n_bins,
+            device=device,
+            step_size=step_size,
+            tile_size=tile_size,
+        )
+
+        self.indices = [
+            (int(x.values), y)
+            for x in self.propagator.h_ds.hologram_number
+            for y in range(self.z_bck_idx, self.n_bins - self.z_fwd_idx)
+        ]
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        if self.shuffle:
+            idx = random.randrange(len(self.indices))
+
+        h_idx, z_idx = self.indices[idx]
+
+        # Propagate to lookahead planes centered on z_idx
+        image = self.propagator.h_ds["image"].isel(hologram_number=h_idx).values.astype(float)
+        z_slc = self.propagator.z_centers[z_idx - self.z_bck_idx : z_idx + self.z_fwd_idx] * 1e-6
+        z_tensor = torch.tensor(z_slc[:, np.newaxis, np.newaxis], dtype=torch.float32).to(self.device)
+        field = self.propagator.torch_holo_set(
+            torch.from_numpy(image).to(self.device), z_tensor
+        ).to(dtype=torch.complex64)
+
+        # Build input channels: amplitude + phase stacked over planes
+        ampl = torch.abs(field).cpu()    # (lookahead, H, W)
+        phase = torch.angle(field).cpu()
+        in_channels = torch.cat([ampl, phase], dim=0).float()  # (2*lookahead, H, W)
+
+        # Build masks
+        num_particles, part_mask, depth_mask, weight_mask = self._create_masks(h_idx, z_idx)
+
+        # Apply transforms (image only)
+        if self.transform:
+            im = {"image": in_channels.numpy(), "horizontal_flip": False, "vertical_flip": False}
+            for t in self.transform:
+                im = t(im)
+            in_channels = torch.tensor(im["image"], dtype=torch.float)
+            if im["horizontal_flip"]:
+                part_mask = torch.flip(part_mask, [0])
+                depth_mask = torch.flip(depth_mask, [0])
+                weight_mask = torch.flip(weight_mask, [0])
+            if im["vertical_flip"]:
+                part_mask = torch.flip(part_mask, [1])
+                depth_mask = torch.flip(depth_mask, [1])
+                weight_mask = torch.flip(weight_mask, [1])
+
+        # Random tile crop
+        in_channels, part_mask, depth_mask, weight_mask = self._random_crop(
+            in_channels, part_mask, depth_mask, weight_mask
+        )
+        return in_channels, part_mask, depth_mask, weight_mask
+
+    def _create_masks(self, h_idx, z_idx):
+        hid = h_idx + 1
+        hid_mask = self.propagator.h_ds["hid"] == hid
+        x_part = self.propagator.h_ds["x"].values[hid_mask]
+        y_part = self.propagator.h_ds["y"].values[hid_mask]
+        z_part = self.propagator.h_ds["z"].values[hid_mask]
+        d_part = self.propagator.h_ds["d"].values[hid_mask]
+
+        H, W = self.propagator.x_arr.shape[0], self.propagator.y_arr.shape[0]
+        unet_mask = np.zeros((H, W))
+        depth_mask = np.zeros((H, W))
+        weight_mask = np.full((H, W), self.deweight)
+
+        z_lo = self.propagator.z_centers[z_idx - self.z_bck_idx]
+        z_hi = self.propagator.z_centers[z_idx + self.z_fwd_idx - 1]
+        cond = np.where((z_part >= z_lo) & (z_part <= z_hi))
+
+        num_particles = 0
+        if np.size(cond[0]) > 0:
+            x_part = x_part[cond]; y_part = y_part[cond]
+            z_part = z_part[cond]; d_part = d_part[cond]
+            for i in range(len(x_part)):
+                z_diff = z_part[i] - self.propagator.z_centers[z_idx]
+                y_diff = self.propagator.y_arr[np.newaxis, :] * 1e6 - y_part[i]
+                x_diff = self.propagator.x_arr[:, np.newaxis] * 1e6 - x_part[i]
+                r2 = y_diff**2 + x_diff**2
+                d2 = (d_part[i] / 2)**2
+                pix = np.where(r2 < d2)
+                unet_mask[pix] = 1.0
+                depth_mask[pix] = z_diff
+                weight_mask[np.where(r2 < 4 * d2)] = 1.0
+                num_particles += 1
+
+        return (num_particles,
+                torch.from_numpy(unet_mask).float(),
+                torch.from_numpy(depth_mask).float(),
+                torch.from_numpy(weight_mask).float())
+
+    def _random_crop(self, image, part_mask, depth_mask, weight_mask):
+        _, h, w = image.shape
+        ts = self.tile_size
+        x0 = random.randint(0, max(h - ts, 0))
+        y0 = random.randint(0, max(w - ts, 0))
+        return (image[:, x0:x0+ts, y0:y0+ts],
+                part_mask[x0:x0+ts, y0:y0+ts],
+                depth_mask[x0:x0+ts, y0:y0+ts],
+                weight_mask[x0:x0+ts, y0:y0+ts])
+
+
 class UpsamplingReader(Dataset):
 
     def __init__(self, conf=None, data_path=None, transform=None, max_size=10000, device="cpu"):
