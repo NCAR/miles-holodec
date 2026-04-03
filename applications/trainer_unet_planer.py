@@ -1,6 +1,10 @@
-import numpy as np  # must be first — patch np.float_ removed in NumPy 2.0 (wandb/timm compat)
-if not hasattr(np, 'float_'):
-    np.float_ = np.float64
+import numpy as np  # must be first — patch aliases removed in NumPy 2.0 (wandb/timm compat)
+if not hasattr(np, 'float_'):    np.float_    = np.float64
+if not hasattr(np, 'complex_'):  np.complex_  = np.complex128
+if not hasattr(np, 'int_'):      np.int_      = np.intp
+if not hasattr(np, 'bool_'):     np.bool_     = np.bool_  # still exists but just in case
+if not hasattr(np, 'object_'):   np.object_   = object
+if not hasattr(np, 'str_'):      np.str_      = np.str_
 
 import warnings
 from torch.utils.data.distributed import DistributedSampler
