@@ -17,7 +17,7 @@ def LoadTransformations(transform_config: str):
         if rate > 0.0:
             tforms.append(RandVerticalFlip(rate))
     if "RandomHorizontalFlip" in transform_config:
-        rate = transform_config["RandomVerticalFlip"]["rate"]
+        rate = transform_config["RandomHorizontalFlip"]["rate"]
         if rate > 0.0:
             tforms.append(RandHorizontalFlip(rate))
     if "Rescale" in transform_config:
@@ -43,7 +43,7 @@ def LoadTransformations(transform_config: str):
         k_sz = transform_config["GaussianBlur"]["kernel_size"]
         sigma = transform_config["GaussianBlur"]["sigma"]
         if rate > 0.0:
-            tforms.append(GaussianBlur(rate, k_sz, brightness))
+            tforms.append(GaussianBlur(rate, k_sz, sigma))
     if "RandomCrop" in transform_config:
         tforms.append(RandomCrop())
     if "Standardize" in transform_config:

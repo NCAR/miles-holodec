@@ -1,7 +1,7 @@
-# Single-plane validation run
-# Hyperparameters from Matt Hayman's hyper_best_20241126.yml (vgg11/fpn, lr optimized)
-# Using trainer_unet_planer.py + LoadHolograms (live wave prop, single z-plane)
-# Purpose: validate pipeline on Casper before multiplane run on Derecho
+# Single-plane model — reproduces old manopt hyperopt exactly
+# Architecture: Linknet + Xception (manopt best, May 2022)
+# lr=2.46e-4, normalize=norm, full augmentation suite
+# Used to verify data/model pipeline reproduces prior results before further experimentation
 
 seed: 1000
 save_loc: "/glade/derecho/scratch/schreck/holodec/single_plane_validate"
@@ -17,20 +17,34 @@ data:
 
 transforms:
     training:
+        RandomVerticalFlip:
+            rate: 0.5
+        RandomHorizontalFlip:
+            rate: 0.5
         Normalize:
-            mode: '255'
+            mode: 'norm'
+        GaussianBlur:
+            rate: 1.0
+            kernel_size: 1
+            sigma: 2.1252219359742823
+        GaussianNoise:
+            rate: 1.0
+            noise: 0.3258530643453389
+        AdjustBrightness:
+            rate: 1.0
+            brightness_factor: 1.269735791766263
     validation:
         Normalize:
-            mode: '255'
+            mode: 'norm'
     inference:
         Normalize:
-            mode: '255'
+            mode: 'norm'
 
 model:
-    name: "fpn"
-    encoder_name: "vgg11"
+    name: "linknet"
+    encoder_name: "xception"
     encoder_weights: "imagenet"
-    in_channels: 1    # single-plane amplitude only
+    in_channels: 1
     classes: 1
     activation: "sigmoid"
 
@@ -39,13 +53,13 @@ loss:
     validation_loss_mask: "dice"
 
 trainer:
-    mode: "none"   # single GPU for validation; bump to ddp for production
-    train_batch_size: 4
-    valid_batch_size: 4
+    mode: "none"
+    train_batch_size: 16
+    valid_batch_size: 16
     batches_per_epoch: 500
     valid_batches_per_epoch: 100
     start_epoch: 0
-    epochs: 50
+    epochs: 100
     amp: true
     grad_accum_every: 1
     thread_workers: 0
@@ -58,10 +72,10 @@ trainer:
         factor: 0.1
         patience: 5
         cooldown: 2
-        min_lr: 1.0e-07
+        min_lr: 1.0e-09
         verbose: true
-        threshold: 0.00029232814653178314
-    learning_rate: 0.00045226229648926385
+        threshold: 0.001
+    learning_rate: 0.00024575732726722595
     weight_decay: 0.0
 
 pbs:
