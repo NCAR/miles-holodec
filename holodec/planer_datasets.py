@@ -77,8 +77,8 @@ class LoadHolograms(Dataset):
         mask = torch.flip(mask, [0]) if hflip else mask
         mask = torch.flip(mask, [1]) if vflip else mask
         image = torch.tensor(image, dtype=torch.float)
-        padded_image, padded_mask = self.pad_images_and_mask(image, mask)
-        return padded_image, padded_mask, int(h_idx), int(z_idx)
+        image, mask = self.random_crop(image, mask)
+        return image, mask, int(h_idx), int(z_idx)
 
     
     def create_mask(self, h_idx, z_idx):
@@ -144,8 +144,19 @@ class LoadHolograms(Dataset):
             for image_transform in self.transform:
                 im = image_transform(im)
         return im["image"], im["horizontal_flip"], im["vertical_flip"]
-        
-    
+
+    def random_crop(self, image, mask):
+        """Extract a random tile_size x tile_size crop from image and mask."""
+        _, h, w = image.shape
+        ts = self.tile_size
+        max_x = max(h - ts, 0)
+        max_y = max(w - ts, 0)
+        x0 = random.randint(0, max_x) if max_x > 0 else 0
+        y0 = random.randint(0, max_y) if max_y > 0 else 0
+        cropped_image = image[:, x0:x0 + ts, y0:y0 + ts]
+        cropped_mask = mask[x0:x0 + ts, y0:y0 + ts]
+        return cropped_image, cropped_mask
+
     def pad_images_and_mask(self, image_stack, mask, target_height = 4896, target_width = 3264):
         """
         Pad the image_stack and mask with zeros to sizes (num_images, channels, 4896, 3264) and (4896, 3264) respectively using PyTorch.
